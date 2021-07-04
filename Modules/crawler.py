@@ -57,9 +57,9 @@ class BaseCrawler():
 
 
 class BaseExchangeCrawler(BaseCrawler):
-    def __init__(self, db_name, interval, symbols):
+    def __init__(self, db_name, interval, symbols, exch_name):
         super(BaseExchangeCrawler, self).__init__(db_name, interval)
-        self.exch_name = "binance"
+        self.exch_name = exch_name
         self.connector.create_meta_table()
         self.exchange = getattr(ccxt, self.exch_name)()
         self.symbols = symbols
@@ -85,6 +85,8 @@ class BaseExchangeCrawler(BaseCrawler):
             raise ConnectionError
 
 class BinanceTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(BinanceTradeDataCrawler, self).__init__(db_name, interval, symbols, "binance")
 
     def transform_symbol(self, symbol):
         return symbol[:-4] + "/" + "USDT"
