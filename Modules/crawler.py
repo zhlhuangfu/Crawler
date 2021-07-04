@@ -6,9 +6,9 @@ Along with the Crawler, there are other methods relate to use the API
 import pdb
 import json
 import time
-import ccxt
 import datetime
 
+import requests
 from .mysql_connector import CryptoCoinConnector
 from .print_section import print_error_sleep, print_sleep, print_write_data
 
@@ -61,7 +61,7 @@ class BaseExchangeCrawler(BaseCrawler):
         super(BaseExchangeCrawler, self).__init__(db_name, interval)
         self.exch_name = exch_name
         self.connector.create_meta_table()
-        self.exchange = getattr(ccxt, self.exch_name)()
+        # self.exchange = getattr(ccxt, self.exch_name)()
         self.symbols = symbols
         data = []
         for symbol in symbols:
@@ -87,18 +87,21 @@ class BaseExchangeCrawler(BaseCrawler):
 class BinanceTradeDataCrawler(BaseExchangeCrawler):
     def __init__(self, db_name, interval, symbols):
         super(BinanceTradeDataCrawler, self).__init__(db_name, interval, symbols, "binance")
-
+        self.url = "https://api1.binance.com/api/v3/trades?symbol={}&limit=1000"
+    
     def transform_symbol(self, symbol):
-        return symbol[:-4] + "/" + "USDT"
+        return symbol
 
     def request_data(self, symbol):
-        return self.exchange.fetch_trades(symbol, limit=1000)
+        url = self.url.format(symbol)
+        response = requests.get(url)
+        return json.loads(response.text)
 
     def write_into_db(self, res_data, symbol):
         data_lst = []
         for item in res_data:
             data = [self.exch_name]
-            isBuyerMaker = True if item["side"] == "buy" else False
-            data += [item["id"], item["price"], item["amount"], item["cost"], item["info"]["T"], isBuyerMaker]
+            data += [item["id"], item["price"], item["qty"], item["quoteQty"], item["time"], item["isBuyerMaker"]]
+            data[5] = int(data[5] / 1000)
             data_lst.append(tuple(data))
         self.connector.insert_trade_data(data_lst, symbol)
