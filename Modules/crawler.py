@@ -61,7 +61,7 @@ class BaseExchangeCrawler(BaseCrawler):
         super(BaseExchangeCrawler, self).__init__(db_name, interval)
         self.exch_name = exch_name
         self.connector.create_meta_table()
-        # self.exchange = getattr(ccxt, self.exch_name)()
+
         self.symbols = symbols
         data = []
         for symbol in symbols:
@@ -88,7 +88,7 @@ class BinanceTradeDataCrawler(BaseExchangeCrawler):
     def __init__(self, db_name, interval, symbols):
         super(BinanceTradeDataCrawler, self).__init__(db_name, interval, symbols, "binance")
         self.url = "https://api1.binance.com/api/v3/trades?symbol={}&limit=1000"
-    
+
     def transform_symbol(self, symbol):
         return symbol
 
@@ -105,3 +105,10 @@ class BinanceTradeDataCrawler(BaseExchangeCrawler):
             data[5] = int(data[5] / 1000)
             data_lst.append(tuple(data))
         self.connector.insert_trade_data(data_lst, symbol)
+
+
+class HuobiTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(BinanceTradeDataCrawler, self).__init__(db_name, interval, symbols, "huobi")
+        self.url = "https://api1.binance.com/api/v3/trades?symbol={}&limit=1000"
+        
