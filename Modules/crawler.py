@@ -84,6 +84,7 @@ class BaseExchangeCrawler(BaseCrawler):
         except:
             raise ConnectionError
 
+
 class BinanceTradeDataCrawler(BaseExchangeCrawler):
     def __init__(self, db_name, interval, symbols):
         super(BinanceTradeDataCrawler, self).__init__(db_name, interval, symbols, "binance")
@@ -109,6 +110,54 @@ class BinanceTradeDataCrawler(BaseExchangeCrawler):
 
 class HuobiTradeDataCrawler(BaseExchangeCrawler):
     def __init__(self, db_name, interval, symbols):
-        super(BinanceTradeDataCrawler, self).__init__(db_name, interval, symbols, "huobi")
-        self.url = "https://api1.binance.com/api/v3/trades?symbol={}&limit=1000"
-        
+        super(HuobiTradeDataCrawler, self).__init__(db_name, interval, symbols, "huobi")
+        self.url = "https://api.hbdm.com/linear-swap-ex/market/history/trade?contract_code={}&size=1000"
+    
+    def transform_symbol(self, symbol):
+        return symbol[:-4] + "-" + "USDT"
+    
+    def request_data(self, symbol):
+        url = self.url.format(symbol)
+        response = requests.get(url)
+        return json.loads(response.text)
+    
+    def write_into_db(self, res_data, symbol):
+        data_lst = []
+        for item in res_data["data"]:
+            for record in item["data"]:
+                data = [self.exch_name]
+                isBuyerMaker = True if record["direction"] == "buy" else False
+                data += [record["id"], record["price"], record["quantity"], record["trade_turnover"],  record["ts"], isBuyerMaker]
+                data[5] = int(data[5] / 1000)
+                data_lst.append(data)
+        self.connector.insert_trade_data(data_lst, symbol)
+
+
+class CoinbaseTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(CoinbaseTradeDataCrawler, self).__init__(db_name, interval, symbols, "coinbase")
+        self.url = "https://api.pro.coinbase.com/products/{}/trades"
+    
+    def transform_symbol(self, symbol):
+        return symbol[:-4] + "-" + "USDT"
+    
+    def request_data(self, symbol):
+        url = self.url.format(symbol)
+        response = requests.get(url)
+        return json.loads(response.text)
+    
+    def write_into_db(self, res_data, symbol):
+        if isinstance(res_data, dict) and "message" in res_data.keys():
+            if res_data["message"] == "NotFound":
+                return
+        data_lst = []
+        date2tick = lambda time_str: time.mktime(datetime.datetime.strptime(time_str,
+                                       r"%Y-%m-%d %H:%M:%S").timetuple())
+        for record in res_data:
+            data = [self.exch_name]
+            isBuyerMaker = True if record["side"] == "buy" else False
+            quoteQty = float(record["size"]) * float(record["price"])
+            tick = date2tick(record["time"].split(".")[0].replace("T", " "))
+            data += [record["trade_id"], record["price"], record["size"], quoteQty, tick, isBuyerMaker]
+            data_lst.append(data)
+        self.connector.insert_trade_data(data_lst, symbol)

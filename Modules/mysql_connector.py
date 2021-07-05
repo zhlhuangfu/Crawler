@@ -84,7 +84,7 @@ class CryptoCoinConnector(MySQLConnector):
         """Create table of trade by tick in binance"""
         table_name = "trade_of_{}".format(symbol)
         sql = "CREATE TABLE IF NOT EXISTS {}".format(table_name)
-        sql += " (exch_name VARCHAR(255), id INT, price DOUBLE, qty DOUBLE, quoteQty DOUBLE, time INT, isBuyerMaker BOOL, PRIMARY KEY (exch_name, id))"
+        sql += " (exch_name VARCHAR(255), id VARCHAR(255), price DOUBLE, qty DOUBLE, quoteQty DOUBLE, time BIGINT(8) unsigned, isBuyerMaker BOOL, PRIMARY KEY (exch_name, id))"
         self.exe_sql(sql)
         print("Tables Created Successfully!")
 
