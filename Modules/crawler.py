@@ -48,11 +48,10 @@ class BaseCrawler():
     def run(self):
         """Run crawler"""
         while True:
-            self.process()
-            # try:
-            #     self.process()
-            # except:
-            #     self.handle_network_issue()
+            try:
+                self.process()
+            except:
+                self.handle_network_issue()
             print_sleep(self.interval)
             time.sleep(self.interval)
         self.connector.close()
@@ -78,17 +77,13 @@ class BaseExchangeCrawler(BaseCrawler):
     def process(self):
         """Kernel function"""
         print_write_data()
-        for symbol in self.symbols:
-            q_symbol = self.transform_symbol(symbol)
-            data = self.request_data(q_symbol)
-            self.write_into_db(data, symbol)
-        # try:
-        #     for symbol in self.symbols:
-        #         q_symbol = self.transform_symbol(symbol)
-        #         data = self.request_data(q_symbol)
-        #         self.write_into_db(data, symbol)
-        # except:
-        #     raise ConnectionError
+        try:
+            for symbol in self.symbols:
+                q_symbol = self.transform_symbol(symbol)
+                data = self.request_data(q_symbol)
+                self.write_into_db(data, symbol)
+        except:
+            raise ConnectionError
 
 
 class BinanceTradeDataCrawler(BaseExchangeCrawler):
@@ -203,7 +198,7 @@ class ProBitGlobalTradeDataCrawler(BaseExchangeCrawler):
     
     def request_data(self, symbol):
         utc_tz = pytz.timezone('UTC')
-        starttime = datetime.datetime.now(tz = utc_tz)-datetime.timedelta(minutes=1)
+        starttime = datetime.datetime.now(tz = utc_tz)-datetime.timedelta(minutes=1) - datetime.timedelta(seconds=5)
         starttime = starttime.isoformat()
         start = str(starttime)
         start = start[0:23]
@@ -240,7 +235,7 @@ class FTXUSTradeDataCrawler(BaseExchangeCrawler):
     
     def request_data(self, symbol):
         utc_tz = pytz.timezone('UTC')
-        starttime = datetime.datetime.now(tz = utc_tz)-datetime.timedelta(minutes=1)
+        starttime = datetime.datetime.now(tz = utc_tz)-datetime.timedelta(minutes=1) - datetime.timedelta(seconds=5)
         start = int(starttime.timestamp())
 
         endtime = datetime.datetime.now(tz = utc_tz)
@@ -336,7 +331,7 @@ class LiquidTradeDataCrawler(BaseExchangeCrawler):
     
     def request_data(self, symbol):
         utc_tz = pytz.timezone('UTC')
-        starttime = datetime.datetime.now(tz = utc_tz)-datetime.timedelta(minutes=1)
+        starttime = datetime.datetime.now(tz = utc_tz)-datetime.timedelta(minutes=1) - datetime.timedelta(seconds=5)
         ts = int(starttime.timestamp())
 
         url = self.url.format(symbol, ts)
@@ -350,5 +345,79 @@ class LiquidTradeDataCrawler(BaseExchangeCrawler):
             isBuyerMaker = True if record["taker_side"] == "buy" else False
             quoteQty = float(record["price"]) * float(record["quantity"])
             data += [record["id"], record["price"], record["quantity"], quoteQty, record["created_at"], isBuyerMaker]
+            data_lst.append(data)
+        self.connector.insert_trade_data(data_lst, symbol)
+
+class CryptoComExchangeTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(CryptoComExchangeTradeDataCrawler, self).__init__(db_name, interval, symbols, "cryptocomexchange")
+        self.url = "https://api.crypto.com/v2/public/get-trades?instrument_name={}"
+    
+    def transform_symbol(self, symbol):
+        return symbol[:-4] + "_" + "USDT"
+    
+    def request_data(self, symbol):
+        url = self.url.format(symbol)
+        response = requests.get(url)
+        return json.loads(response.text)
+    
+    def write_into_db(self, res_data, symbol):
+        data_lst = []
+        for record in res_data["result"]["data"]:
+            data = [self.exch_name]
+            isBuyerMaker = True if record["s"] == "BUY" else False
+            quoteQty = float(record["p"]) * float(record["q"])
+            data += [record["d"], record["p"], record["q"], quoteQty,  record["t"], isBuyerMaker]
+            data[5] = int(int(data[5]) / 1000)
+            data_lst.append(data)
+        self.connector.insert_trade_data(data_lst, symbol)
+
+class AscendEXTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(AscendEXTradeDataCrawler, self).__init__(db_name, interval, symbols, "ascendex")
+        self.url = "https://ascendex.com/api/pro/v1/trades?symbol={}&n=50"
+    
+    def transform_symbol(self, symbol):
+        return symbol[:-4] + "/" + "USDT"
+    
+    def request_data(self, symbol):
+        url = self.url.format(symbol)
+        response = requests.get(url)
+        return json.loads(response.text)
+    
+    def write_into_db(self, res_data, symbol):
+        data_lst = []
+        for record in res_data["data"]["data"]:
+            data = [self.exch_name]
+            trade_id = symbol + str(record["seqnum"])
+            quoteQty = float(record["p"]) * float(record["q"])
+            data += [trade_id, record["p"], record["q"], quoteQty,  record["ts"], record["bm"]]
+            data[5] = int(int(data[5]) / 1000)
+            data_lst.append(data)
+        self.connector.insert_trade_data(data_lst, symbol)
+
+class CoinDCXTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(CoinDCXTradeDataCrawler, self).__init__(db_name, interval, symbols, "coindcx")
+        self.url = "https://public.coindcx.com/market_data/trade_history?pair={}&limit=50"
+    
+    def transform_symbol(self, symbol):
+        return "B-" + symbol[:-4] + "_" + "USDT"
+    
+    def request_data(self, symbol):
+        url = self.url.format(symbol)
+        response = requests.get(url)
+        if response.text == "":
+            return ""
+        return json.loads(response.text)
+    
+    def write_into_db(self, res_data, symbol):
+        data_lst = []
+        for record in res_data:
+            data = [self.exch_name]
+            trade_id = symbol + str(record["T"]) + str(record["q"])
+            quoteQty = float(record["p"]) * float(record["q"])
+            data += [trade_id, record["p"], record["q"], quoteQty,  record["T"], record["m"]]
+            data[5] = int(int(data[5]) / 1000)
             data_lst.append(data)
         self.connector.insert_trade_data(data_lst, symbol)
