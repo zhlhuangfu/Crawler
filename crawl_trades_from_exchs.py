@@ -7,7 +7,11 @@ from Modules.crawler import (
     BitstampTradeDataCrawler, BinanceUSTradeDataCrawler, CoinbaseTradeDataCrawler,
     FTXTradeDataCrawler, GateIOTradeDataCrawler, GeminiTradeDataCrawler,
     HuobiTradeDataCrawler, KrakenTradeDataCrawler, KucoinTradeDataCrawler,
-    PoloniexTradeDataCrawler)
+    PoloniexTradeDataCrawler, 
+    AscendEXTradeDataCrawler, BittrexTradeDataCrawler,
+    CoinDCXTradeDataCrawler, CryptoComExchangeTradeDataCrawler, FTXUSTradeDataCrawler,
+    HuobiKoreaTradeDataCrawler, LiquidTradeDataCrawler, OKExTradeDataCrawler, ProBitGlobalTradeDataCrawler
+    )
 
 exch_dct = {
     "binance" : BinanceTradeDataCrawler,
@@ -22,7 +26,16 @@ exch_dct = {
     "huobi": HuobiTradeDataCrawler,
     "kraken": KrakenTradeDataCrawler,
     "kucoin": KucoinTradeDataCrawler,
-    "poloniex": PoloniexTradeDataCrawler
+    "poloniex": PoloniexTradeDataCrawler,
+    "ascendEX" : AscendEXTradeDataCrawler,
+    "bittrex": BittrexTradeDataCrawler,
+    "coinDCX": CoinDCXTradeDataCrawler,
+    "cryptoComExchange": CryptoComExchangeTradeDataCrawler,
+    "ftxUS": FTXUSTradeDataCrawler,
+    "huobiKorea": HuobiKoreaTradeDataCrawler,
+    "liquid": LiquidTradeDataCrawler,
+    "OKEx": OKExTradeDataCrawler,
+    "proBitGlobal": ProBitGlobalTradeDataCrawler
 }
 
 parser = argparse.ArgumentParser(description='Process some integers.')

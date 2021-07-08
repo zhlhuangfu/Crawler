@@ -4,10 +4,11 @@ process_name="crawl_trades_from_exchs.py"
 # 添加启动命令
 function start(){
     echo "start..."
-    exchs=(binance binance.us bitfinex bitflyer bitstamp coinbase ftx gate.io gemini huobi kraken kucoin poloniex)
+    exchs=(binance binance.us bitfinex bitflyer bitstamp coinbase ftx gate.io gemini huobi kraken kucoin poloniex 
+            ascendEx bittrex coinDCX cryptoComExchange ftxUS huobiKorea liquid OKEx proBitGlobal)
     for name in ${exchs[*]}; 
     do 
-        log_name="logs/crawl_from_${name}_.log"
+        log_name="logs/crawl_from_${name}.log"
         echo ${log_name}
         nohup python -u $process_name --exch_name $name > $log_name 2>&1 &
     done;

@@ -11,7 +11,7 @@ class BaseMySQLConnector():
 
     def __init__(self, db_name):
         """Init"""
-        self.db = MySQLConnector.create_connection()
+        self.db = BaseMySQLConnector.create_connection()
         self.create_database(db_name)
 
     def create_database(self, db_name):
