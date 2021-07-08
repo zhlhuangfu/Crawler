@@ -45,7 +45,7 @@ parser.add_argument('--exch_name', type=str,
 args = parser.parse_args()
 
 interval = 60
-db_name = "CryptoTrades"
+db_name = "trade_info"
 symbols = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "ADAUSDT", "DOGEUSDT", "XRPUSDT", "LTCUSDT", "DOTUSDT", "UNIUSDT", "BCHUSDT"]
 if args.exch_name == "kraken":
     interval = 30
