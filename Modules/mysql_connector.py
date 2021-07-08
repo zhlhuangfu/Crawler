@@ -6,7 +6,7 @@ from tqdm import tqdm
 import mysql.connector as mq
 
 
-class MySQLConnector():
+class BaseMySQLConnector():
     """Base abstract to connect to MySQL"""
 
     def __init__(self, db_name):
@@ -64,7 +64,7 @@ class MySQLConnector():
         self.db.close()
 
 
-class CryptoCoinConnector(MySQLConnector):
+class CryptoCoinConnector(BaseMySQLConnector):
     """Extended class for crawling CryptoCoin"""
 
     def create_meta_table(self):
