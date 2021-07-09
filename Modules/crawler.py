@@ -28,10 +28,10 @@ class BaseCrawler():
     def request_data(self, *kwargs):
         raise NotImplementedError
 
-    def process(self):
+    def _kernel(self, *kwargs):
         raise NotImplementedError
 
-    def handle_network_issue(self):
+    def handle_network_issue(self, function, *kwargs):
         """Handle network issue"""
         FLAG = False
         for i in range(1, 60 * 10 + 1):
@@ -39,20 +39,22 @@ class BaseCrawler():
             print_error_sleep(i)
             time.sleep(i)
             try:
-                self.process()
+                function(*kwargs)
                 FLAG = True
 
             except:
                 FLAG = False
 
-    def run(self):
+    def run(self, test_flag=False):
         """Run crawler"""
         while True:
             try:
-                self.process()
+                self._kernel()
             except:
-                self.handle_network_issue()
+                self.handle_network_issue(self._kernel)
             print_sleep(self.interval)
+            if test_flag:
+                break
             time.sleep(self.interval)
         self.connector.close()
 
@@ -71,19 +73,43 @@ class BaseExchangeCrawler(BaseCrawler):
             self.connector.create_trade_info_table(symbol)
         self.connector.insert_meta_data(data)
     
-    def transform_symbol(self, symbols):
-        raise NotImplementedError
+    def transform_symbol(self, symbol):
+        return symbol
+    
+    def construct_url(self, symbol):
+        return self.url.format(symbol)
+    
+    def request_data(self, url):
+        response = requests.get(url)
+        return json.loads(response.text)
 
-    def process(self):
+    def parse_data(self, data):
+        raise NotImplementedError
+    
+    def write_into_db(self, data_lst, symbol):
+        self.connector.insert_trade_data(data_lst, symbol)
+
+    def _kernel(self, symbol):
+        q_symbol = self.transform_symbol(symbol)
+        url = self.construct_url(q_symbol)
+        data = self.request_data(url)
+        data_lst = self.parse_data(data)
+        self.write_into_db(data_lst, symbol)
+
+    def run(self, test_flag=False):
         """Kernel function"""
-        print_write_data()
-        try:
+        while True:
+            print_write_data()
             for symbol in self.symbols:
-                q_symbol = self.transform_symbol(symbol)
-                data = self.request_data(q_symbol)
-                self.write_into_db(data, symbol)
-        except:
-            raise ConnectionError
+                try:
+                    self._kernel(symbol)
+                except:
+                    self.handle_network_issue(self._kernel, symbol)
+            print_sleep(self.interval)
+            if test_flag:
+                break
+            time.sleep(self.interval)
+        self.connector.close()
 
 
 class BinanceTradeDataCrawler(BaseExchangeCrawler):
@@ -91,22 +117,14 @@ class BinanceTradeDataCrawler(BaseExchangeCrawler):
         super(BinanceTradeDataCrawler, self).__init__(db_name, interval, symbols, "binance")
         self.url = "https://api1.binance.com/api/v3/trades?symbol={}&limit=1000"
 
-    def transform_symbol(self, symbol):
-        return symbol
-
-    def request_data(self, symbol):
-        url = self.url.format(symbol)
-        response = requests.get(url)
-        return json.loads(response.text)
-
-    def write_into_db(self, res_data, symbol):
+    def parse_data(self, res_data):
         data_lst = []
         for item in res_data:
             data = [self.exch_name]
             data += [item["id"], item["price"], item["qty"], item["quoteQty"], item["time"], item["isBuyerMaker"]]
             data[5] = int(data[5] / 1000)
             data_lst.append(tuple(data))
-        self.connector.insert_trade_data(data_lst, symbol)
+        return data_lst
 
 
 class HuobiTradeDataCrawler(BaseExchangeCrawler):
@@ -117,12 +135,7 @@ class HuobiTradeDataCrawler(BaseExchangeCrawler):
     def transform_symbol(self, symbol):
         return symbol[:-4] + "-" + "USDT"
     
-    def request_data(self, symbol):
-        url = self.url.format(symbol)
-        response = requests.get(url)
-        return json.loads(response.text)
-    
-    def write_into_db(self, res_data, symbol):
+    def parse_data(self, res_data):
         data_lst = []
         for item in res_data["data"]:
             for record in item["data"]:
@@ -131,7 +144,7 @@ class HuobiTradeDataCrawler(BaseExchangeCrawler):
                 data += [record["id"], record["price"], record["quantity"], record["trade_turnover"],  record["ts"], isBuyerMaker]
                 data[5] = int(data[5] / 1000)
                 data_lst.append(data)
-        self.connector.insert_trade_data(data_lst, symbol)
+        return data_lst
 
 
 class CoinbaseTradeDataCrawler(BaseExchangeCrawler):
@@ -142,12 +155,7 @@ class CoinbaseTradeDataCrawler(BaseExchangeCrawler):
     def transform_symbol(self, symbol):
         return symbol[:-4] + "-" + "USDT"
     
-    def request_data(self, symbol):
-        url = self.url.format(symbol)
-        response = requests.get(url)
-        return json.loads(response.text)
-    
-    def write_into_db(self, res_data, symbol):
+    def parse_data(self, res_data):
         if isinstance(res_data, dict) and "message" in res_data.keys():
             if res_data["message"] == "NotFound":
                 return
@@ -155,13 +163,15 @@ class CoinbaseTradeDataCrawler(BaseExchangeCrawler):
         date2tick = lambda time_str: time.mktime(datetime.datetime.strptime(time_str,
                                        r"%Y-%m-%d %H:%M:%S").timetuple())
         for record in res_data:
-            data = [self.exch_name]
-            isBuyerMaker = True if record["side"] == "buy" else False
-            quoteQty = float(record["size"]) * float(record["price"])
-            tick = date2tick(record["time"].split(".")[0].replace("T", " "))
-            data += [record["trade_id"], record["price"], record["size"], quoteQty, tick, isBuyerMaker]
-            data_lst.append(data)
-        self.connector.insert_trade_data(data_lst, symbol)
+                data = [self.exch_name]
+                isBuyerMaker = True if record["side"] == "buy" else False
+                quoteQty = float(record["size"]) * float(record["price"])
+                rtime = record["time"].replace("Z", "")
+                tick = date2tick(rtime.split(".")[0].replace("T", " "))
+                data += [record["trade_id"], record["price"], record["size"], quoteQty, tick, isBuyerMaker]
+                data_lst.append(data)
+
+        return data_lst
 
 class HuobiKoreaTradeDataCrawler(BaseExchangeCrawler):
     def __init__(self, db_name, interval, symbols):
@@ -171,12 +181,7 @@ class HuobiKoreaTradeDataCrawler(BaseExchangeCrawler):
     def transform_symbol(self, symbol):
         return symbol.lower()
     
-    def request_data(self, symbol):
-        url = self.url.format(symbol)
-        response = requests.get(url)
-        return json.loads(response.text)
-    
-    def write_into_db(self, res_data, symbol):
+    def parse_data(self, res_data):
         data_lst = []
         for item in res_data["data"]:
             for record in item["data"]:
@@ -186,7 +191,7 @@ class HuobiKoreaTradeDataCrawler(BaseExchangeCrawler):
                 data += [record["trade-id"], record["price"], record["amount"], quoteQty,  record["ts"], isBuyerMaker]
                 data[5] = int(data[5] / 1000)
                 data_lst.append(data)
-        self.connector.insert_trade_data(data_lst, symbol)
+        return data_lst
 
 class ProBitGlobalTradeDataCrawler(BaseExchangeCrawler):
     def __init__(self, db_name, interval, symbols):
@@ -196,7 +201,8 @@ class ProBitGlobalTradeDataCrawler(BaseExchangeCrawler):
     def transform_symbol(self, symbol):
         return symbol[:-4] + "-" + "USDT"
     
-    def request_data(self, symbol):
+
+    def construct_url(self, symbol):
         utc_tz = pytz.timezone('UTC')
         starttime = datetime.datetime.now(tz = utc_tz)-datetime.timedelta(minutes=1) - datetime.timedelta(seconds=5)
         starttime = starttime.isoformat()
@@ -209,11 +215,9 @@ class ProBitGlobalTradeDataCrawler(BaseExchangeCrawler):
         end = str(endtime)
         end = end[0:23]
         end = end + 'Z'
-        url = self.url.format(symbol, start, end)
-        response = requests.get(url)
-        return json.loads(response.text)
+        return self.url.format(symbol, start, end)
     
-    def write_into_db(self, res_data, symbol):
+    def parse_data(self, res_data):
         data_lst = []
         for record in res_data["data"]:
             data = [self.exch_name]
@@ -223,7 +227,7 @@ class ProBitGlobalTradeDataCrawler(BaseExchangeCrawler):
             ts = int(d.timestamp())
             data += [record["id"], record["price"], record["quantity"], quoteQty, ts, isBuyerMaker]
             data_lst.append(data)
-        self.connector.insert_trade_data(data_lst, symbol)
+        return data_lst
 
 class FTXUSTradeDataCrawler(BaseExchangeCrawler):
     def __init__(self, db_name, interval, symbols):
@@ -233,7 +237,7 @@ class FTXUSTradeDataCrawler(BaseExchangeCrawler):
     def transform_symbol(self, symbol):
         return symbol[:-4] + "/" + "USD"
     
-    def request_data(self, symbol):
+    def construct_url(self, symbol):
         utc_tz = pytz.timezone('UTC')
         starttime = datetime.datetime.now(tz = utc_tz)-datetime.timedelta(minutes=1) - datetime.timedelta(seconds=5)
         start = int(starttime.timestamp())
@@ -241,11 +245,9 @@ class FTXUSTradeDataCrawler(BaseExchangeCrawler):
         endtime = datetime.datetime.now(tz = utc_tz)
         end = int(endtime.timestamp())
 
-        url = self.url.format(symbol, start, end)
-        response = requests.get(url)
-        return json.loads(response.text)
-    
-    def write_into_db(self, res_data, symbol):
+        return self.url.format(symbol, start, end)
+
+    def parse_data(self, res_data):
         data_lst = []
         for record in res_data["result"]:
             data = [self.exch_name]
@@ -256,7 +258,7 @@ class FTXUSTradeDataCrawler(BaseExchangeCrawler):
             ts = int(d.timestamp())
             data += [record["id"], record["price"], record["size"], quoteQty, ts, isBuyerMaker]
             data_lst.append(data)
-        self.connector.insert_trade_data(data_lst, symbol)
+        return data_lst
 
 class BittrexTradeDataCrawler(BaseExchangeCrawler):
     def __init__(self, db_name, interval, symbols):
@@ -266,12 +268,9 @@ class BittrexTradeDataCrawler(BaseExchangeCrawler):
     def transform_symbol(self, symbol):
         return symbol[:-4] + "-" + "USDT"
     
-    def request_data(self, symbol):
-        url = self.url.format(symbol)
-        response = requests.get(url)
-        return json.loads(response.text)
-    
-    def write_into_db(self, res_data, symbol):
+    def parse_data(self, res_data):
+        if isinstance(res_data, dict):
+            if res_data["code"] == "MARKET_DOES_NOT_EXIST": return
         data_lst = []
         for record in res_data:
             data = [self.exch_name]
@@ -282,7 +281,7 @@ class BittrexTradeDataCrawler(BaseExchangeCrawler):
             ts = int(d.timestamp())
             data += [record["id"], record["rate"], record["quantity"], quoteQty, ts, isBuyerMaker]
             data_lst.append(data)
-        self.connector.insert_trade_data(data_lst, symbol)
+        return data_lst
 
 class OKExTradeDataCrawler(BaseExchangeCrawler):
     def __init__(self, db_name, interval, symbols):
@@ -292,12 +291,7 @@ class OKExTradeDataCrawler(BaseExchangeCrawler):
     def transform_symbol(self, symbol):
         return symbol[:-4] + "-" + "USDT"
     
-    def request_data(self, symbol):
-        url = self.url.format(symbol)
-        response = requests.get(url)
-        return json.loads(response.text)
-    
-    def write_into_db(self, res_data, symbol):
+    def parse_data(self, res_data):
         data_lst = []
         for record in res_data:
             data = [self.exch_name]
@@ -308,7 +302,7 @@ class OKExTradeDataCrawler(BaseExchangeCrawler):
             ts = int(d.timestamp())
             data += [record["trade_id"], record["price"], record["size"], quoteQty, ts, isBuyerMaker]
             data_lst.append(data)
-        self.connector.insert_trade_data(data_lst, symbol)
+        return data_lst
 
 class LiquidTradeDataCrawler(BaseExchangeCrawler):
     def __init__(self, db_name, interval, symbols):
@@ -329,16 +323,13 @@ class LiquidTradeDataCrawler(BaseExchangeCrawler):
             print(product_id)
         return product_id
     
-    def request_data(self, symbol):
+    def construct_url(self, symbol):
         utc_tz = pytz.timezone('UTC')
         starttime = datetime.datetime.now(tz = utc_tz)-datetime.timedelta(minutes=1) - datetime.timedelta(seconds=5)
         ts = int(starttime.timestamp())
-
-        url = self.url.format(symbol, ts)
-        response = requests.get(url)
-        return json.loads(response.text)
+        return self.url.format(symbol, ts)
     
-    def write_into_db(self, res_data, symbol):
+    def parse_data(self, res_data):
         data_lst = []
         for record in res_data:
             data = [self.exch_name]
@@ -346,7 +337,7 @@ class LiquidTradeDataCrawler(BaseExchangeCrawler):
             quoteQty = float(record["price"]) * float(record["quantity"])
             data += [record["id"], record["price"], record["quantity"], quoteQty, record["created_at"], isBuyerMaker]
             data_lst.append(data)
-        self.connector.insert_trade_data(data_lst, symbol)
+        return data_lst
 
 class CryptoComExchangeTradeDataCrawler(BaseExchangeCrawler):
     def __init__(self, db_name, interval, symbols):
@@ -356,12 +347,7 @@ class CryptoComExchangeTradeDataCrawler(BaseExchangeCrawler):
     def transform_symbol(self, symbol):
         return symbol[:-4] + "_" + "USDT"
     
-    def request_data(self, symbol):
-        url = self.url.format(symbol)
-        response = requests.get(url)
-        return json.loads(response.text)
-    
-    def write_into_db(self, res_data, symbol):
+    def parse_data(self, res_data, symbol):
         data_lst = []
         for record in res_data["result"]["data"]:
             data = [self.exch_name]
@@ -370,7 +356,7 @@ class CryptoComExchangeTradeDataCrawler(BaseExchangeCrawler):
             data += [record["d"], record["p"], record["q"], quoteQty,  record["t"], isBuyerMaker]
             data[5] = int(int(data[5]) / 1000)
             data_lst.append(data)
-        self.connector.insert_trade_data(data_lst, symbol)
+        return data_lst
 
 class AscendEXTradeDataCrawler(BaseExchangeCrawler):
     def __init__(self, db_name, interval, symbols):
@@ -380,21 +366,17 @@ class AscendEXTradeDataCrawler(BaseExchangeCrawler):
     def transform_symbol(self, symbol):
         return symbol[:-4] + "/" + "USDT"
     
-    def request_data(self, symbol):
-        url = self.url.format(symbol)
-        response = requests.get(url)
-        return json.loads(response.text)
-    
-    def write_into_db(self, res_data, symbol):
+    def parse_data(self, res_data):
         data_lst = []
         for record in res_data["data"]["data"]:
             data = [self.exch_name]
-            trade_id = symbol + str(record["seqnum"])
+            trade_id = str(record["seqnum"])
             quoteQty = float(record["p"]) * float(record["q"])
             data += [trade_id, record["p"], record["q"], quoteQty,  record["ts"], record["bm"]]
             data[5] = int(int(data[5]) / 1000)
             data_lst.append(data)
-        self.connector.insert_trade_data(data_lst, symbol)
+
+        return data_lst
 
 class CoinDCXTradeDataCrawler(BaseExchangeCrawler):
     def __init__(self, db_name, interval, symbols):
@@ -404,14 +386,13 @@ class CoinDCXTradeDataCrawler(BaseExchangeCrawler):
     def transform_symbol(self, symbol):
         return "B-" + symbol[:-4] + "_" + "USDT"
     
-    def request_data(self, symbol):
-        url = self.url.format(symbol)
+    def request_data(self, url):
         response = requests.get(url)
         if response.text == "":
             return ""
         return json.loads(response.text)
     
-    def write_into_db(self, res_data, symbol):
+    def parse_data(self, res_data):
         data_lst = []
         for record in res_data:
             data = [self.exch_name]
@@ -420,31 +401,24 @@ class CoinDCXTradeDataCrawler(BaseExchangeCrawler):
             data += [trade_id, record["p"], record["q"], quoteQty,  record["T"], record["m"]]
             data[5] = int(int(data[5]) / 1000)
             data_lst.append(data)
-        self.connector.insert_trade_data(data_lst, symbol)
+        return data_lst
 
 
 class KrakenTradeDataCrawler(BaseExchangeCrawler):
     def __init__(self, db_name, interval, symbols):
         super(KrakenTradeDataCrawler, self).__init__(db_name, interval, symbols, "kraken")
         self.url = "https://api.kraken.com/0/public/Trades?pair={}&since={}"
-    
-    def transform_symbol(self, symbol):
-        return symbol
 
-    def request_data(self, symbol):
+    def construct_url(self, symbol):
         end_time = time.time()
         start_time = int(end_time - 60 * 1.5)
-        url = self.url.format(symbol, start_time)
-        response = requests.get(url)
-        return json.loads(response.text)
+        return self.url.format(symbol, start_time)
 
-    def write_into_db(self, res_data, symbol):
+    def parse_data(self, res_data):
         if len(res_data["error"]) > 0:
             return
-        
         data_lst = []
-        q_symbol = "XBTUSDT" if symbol == "BTCUSDT" else symbol
-        trade_lst = res_data["result"][q_symbol]
+        trade_lst, _ = res_data["result"].values()
         for record in trade_lst:
             data = [self.exch_name]
             price = float(record[0])
@@ -456,7 +430,7 @@ class KrakenTradeDataCrawler(BaseExchangeCrawler):
             
             data += [idx, price, qty, quoteQty, tick, isBuyerMaker]
             data_lst.append(data)
-        self.connector.insert_trade_data(data_lst, symbol)
+        return data_lst
 
 
 class FTXTradeDataCrawler(BaseExchangeCrawler):
@@ -467,17 +441,15 @@ class FTXTradeDataCrawler(BaseExchangeCrawler):
     def transform_symbol(self, symbol):
         return symbol[:-4] + "/" + "USDT"
     
-    def request_data(self, symbol):
+    # def request_data(self, symbol):
+    def construct_url(self, symbol):
 
         end_time = int(time.time())
         start_time = int(end_time - 60 * 1.5)
         
-        url = self.url.format(symbol, start_time, end_time)
-        response = requests.get(url)
-
-        return json.loads(response.text)
+        return self.url.format(symbol, start_time, end_time)
     
-    def write_into_db(self, res_data, symbol):
+    def parse_data(self, res_data):
         if not res_data["success"]:
             return
         data_lst = []
@@ -492,7 +464,7 @@ class FTXTradeDataCrawler(BaseExchangeCrawler):
             data += [record["id"], record["price"], record["size"], quoteQty, tick, isBuyerMaker]
             data_lst.append(data)
         
-        self.connector.insert_trade_data(data_lst, symbol)
+        return data_lst
 
     
 class KucoinTradeDataCrawler(BaseExchangeCrawler):
@@ -503,12 +475,7 @@ class KucoinTradeDataCrawler(BaseExchangeCrawler):
     def transform_symbol(self, symbol):
         return symbol[:-4] + "-" + "USDT"
     
-    def request_data(self, symbol):
-        url = self.url.format(symbol)
-        response = requests.get(url)
-        return json.loads(response.text)
-    
-    def write_into_db(self, res_data, symbol):
+    def parse_data(self, res_data):
         if len(res_data["data"]) == 0:
             return
         data_lst = []
@@ -521,7 +488,7 @@ class KucoinTradeDataCrawler(BaseExchangeCrawler):
             data += [record["sequence"], record["price"], record["size"], quoteQty, tick, isBuyerMaker]
             data_lst.append(data)
         
-        self.connector.insert_trade_data(data_lst, symbol)
+        return data_lst
 
 
 class BitfinexTradeDataCrawler(BaseExchangeCrawler):
@@ -532,17 +499,15 @@ class BitfinexTradeDataCrawler(BaseExchangeCrawler):
     def transform_symbol(self, symbol):
         return "t" + symbol[:-1]
     
-    def request_data(self, symbol):
+
+    def construct_url(self, symbol):
         end_time = time.time()
         start_time = end_time - 60 * 1.5
         start_time = int(1000 * start_time)
         end_time = int(1000 * end_time)
-        pdb.set_trace()
-        url = self.url.format(symbol, start_time, end_time)
-        response = requests.get(url)
-        return json.loads(response.text)
+        return self.url.format(symbol, start_time, end_time)
     
-    def write_into_db(self, res_data, symbol):
+    def parse_data(self, res_data):
         if len(res_data) == 0:
             return
         data_lst = []
@@ -554,7 +519,7 @@ class BitfinexTradeDataCrawler(BaseExchangeCrawler):
             quoteQty = qty * record[3]
             data += [record[0], record[3], qty, quoteQty, tick, isBuyerMaker]
             data_lst.append(data)
-        self.connector.insert_trade_data(data_lst, symbol)
+        return data_lst
 
     
 class GateIOTradeDataCrawler(BaseExchangeCrawler):
@@ -565,13 +530,7 @@ class GateIOTradeDataCrawler(BaseExchangeCrawler):
     def transform_symbol(self, symbol):
         return symbol[:-4] + "_" + "USDT"
     
-    def request_data(self, symbol):
-        url = self.url.format(symbol)
-
-        response = requests.get(url)
-        return json.loads(response.text)
-    
-    def write_into_db(self, res_data, symbol):
+    def parse_data(self, res_data):
         if isinstance(res_data, list) and len(res_data) == 0 or isinstance(res_data, dict):
             return 
         data_lst = []
@@ -581,22 +540,14 @@ class GateIOTradeDataCrawler(BaseExchangeCrawler):
             isBuyerMaker = True if record["side"] == "buy" else False
             data += [record["id"], record["price"], record["amount"], quoteQty, record["create_time"], isBuyerMaker]
             data_lst.append(data)
-        self.connector.insert_trade_data(data_lst, symbol)
+        return data_lst
 
 class BinanceUSTradeDataCrawler(BaseExchangeCrawler):
     def __init__(self, db_name, interval, symbols):
         super(BinanceUSTradeDataCrawler, self).__init__(db_name, interval, symbols, "binance.us")
         self.url = "https://api.binance.us/api/v3/trades?symbol={}&limit=1000"
-    
-    def transform_symbol(self, symbol):
-        return symbol
 
-    def request_data(self, symbol):
-        url = self.url.format(symbol)
-        response = requests.get(url)
-        return json.loads(response.text)
-
-    def write_into_db(self, res_data, symbol):
+    def parse_data(self, res_data):
         if isinstance(res_data, dict) and res_data["code"] == -1121:
             return
         data_lst = []
@@ -605,7 +556,7 @@ class BinanceUSTradeDataCrawler(BaseExchangeCrawler):
             data += [item["id"], item["price"], item["qty"], item["quoteQty"], item["time"], item["isBuyerMaker"]]
             data[5] = int(data[5] / 1000)
             data_lst.append(tuple(data))
-        self.connector.insert_trade_data(data_lst, symbol)
+        return data_lst
 
 
 class BitstampTradeDataCrawler(BaseExchangeCrawler):
@@ -616,15 +567,14 @@ class BitstampTradeDataCrawler(BaseExchangeCrawler):
     def transform_symbol(self, symbol):
         return symbol.lower()
     
-    def request_data(self, symbol):
-        url = self.url.format(symbol)
+    def request_data(self, url):
         response = requests.get(url)
         r_str = response.text
         if "script" in r_str: 
             return r_str
         return json.loads(response.text)
     
-    def write_into_db(self, res_data, symbol):
+    def parse_data(self, res_data):
         if len(res_data) == 0 or isinstance(res_data, str):
             return
         data_lst = []
@@ -634,7 +584,7 @@ class BitstampTradeDataCrawler(BaseExchangeCrawler):
             isBuyerMaker = True if record["type"] == "0" else False
             data += [record["tid"], record["price"], record["amount"], quoteQty, record["date"], isBuyerMaker]
             data_lst.append(data)
-        self.connector.insert_trade_data(data_lst, symbol)
+        return data_lst
 
 
 class GeminiTradeDataCrawler(BaseExchangeCrawler):
@@ -645,14 +595,12 @@ class GeminiTradeDataCrawler(BaseExchangeCrawler):
     def transform_symbol(self, symbol):
         return symbol[:-1]
     
-    def request_data(self, symbol):
+    def construct_url(self, symbol):
         now = time.time()
         since = int(now - 60 * 1.5)
-        url = self.url.format(symbol, since)
-        response = requests.get(url)
-        return json.loads(response.text)
+        return self.url.format(symbol, since)
     
-    def write_into_db(self, res_data, symbol):
+    def parse_data(self, res_data):
         # {"timestamp":1625599445,"timestampms":1625599445157,"tid":46900544038,"price":"33931.81","amount":"0.00146621","exchange":"gemini","type":"buy"}
         if isinstance(res_data, dict) and res_data["result"] == "error":
             return
@@ -664,7 +612,7 @@ class GeminiTradeDataCrawler(BaseExchangeCrawler):
             isBuyerMaker = True if record["type"] == "buy" else False
             data += [record["tid"], record["price"], record["amount"], quoteQty, record["timestamp"], isBuyerMaker]
             data_lst.append(data)
-        self.connector.insert_trade_data(data_lst, symbol)
+        return data_lst
     
 
 class BitflyerTradeDataCrawler(BaseExchangeCrawler):
@@ -675,12 +623,7 @@ class BitflyerTradeDataCrawler(BaseExchangeCrawler):
     def transform_symbol(self, symbol):
         return symbol[:-4] + "_" + "USD"
     
-    def request_data(self, symbol):
-        url = self.url.format(symbol)
-        response = requests.get(url)
-        return json.loads(response.text)
-    
-    def write_into_db(self, res_data, symbol):
+    def parse_data(self, res_data):
         # {"id":2235850539,"side":"BUY","price":34108.93,"size":0.12156082,"exec_date":"2021-07-06T23:44:32.76","buy_child_order_acceptance_id":"JRF20210706-234432-301999","sell_child_order_acceptance_id":"JRF20210706-234422-134754"}
         if len(res_data) == 0:
             return
@@ -694,7 +637,7 @@ class BitflyerTradeDataCrawler(BaseExchangeCrawler):
             isBuyerMaker = True if record["side"] == "BUY" else False
             data += [record["id"], record["price"], record["size"], quoteQty, tick, isBuyerMaker]
             data_lst.append(data)
-        self.connector.insert_trade_data(data_lst, symbol)
+        return data_lst
 
 
 class PoloniexTradeDataCrawler(BaseExchangeCrawler):
@@ -705,16 +648,14 @@ class PoloniexTradeDataCrawler(BaseExchangeCrawler):
     def transform_symbol(self, symbol):
         return symbol[-4:] + "_" + symbol[:-4]
     
-    def request_data(self, symbol):
+    def construct_url(self, symbol):
         end_time = time.time()
         start_time = end_time - 60 * 1.5
         end_time = int(end_time)
         start_time = int(start_time)
-        url = self.url.format(symbol, start_time, end_time)
-        response = requests.get(url)
-        return json.loads(response.text)
+        return self.url.format(symbol, start_time, end_time)
     
-    def write_into_db(self, res_data, symbol):
+    def parse_data(self, res_data):
         if isinstance(res_data, dict) and "error" in res_data.keys():
             return
         # {"globalTradeID":508982120,"tradeID":40158513,"date":"2021-01-13 00:56:11","type":"buy","rate":"32634.47060135","amount":"0.01700323","total":"554.89140956","orderNumber":840128031121}
@@ -727,4 +668,25 @@ class PoloniexTradeDataCrawler(BaseExchangeCrawler):
             tick = date2tick(record["date"])
             data += [record["tradeID"], record["rate"], record["amount"], record["total"], tick, isBuyerMaker]
             data_lst.append(data)
-        self.connector.insert_trade_data(data_lst, symbol)
+        return data_lst
+
+    
+class BitexenTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(BitexenTradeDataCrawler, self).__init__(db_name, interval, symbols, "bitexen")
+        self.url = "https://www.bitexen.com/api/v1/order_book/{}/"
+    
+    def parse_data(self, res_data):
+        if res_data["data"] == None:
+            return
+        data_lst = []
+        for record in res_data["data"]["last_transactions"]:
+            # {"amount": "0.09647533", "price": "32409.64", "time": "1625792177.446199", "type": "B"}\
+            data = [self.exch_name]
+            tick = record["time"].split(".")[0]
+            tid = "".join(record["time"].split("."))
+            quoteQty = float(record["amount"]) * float(record["price"])
+            isBuyerMaker = True if record["type"] == "B" else False
+            data += [tid, record["price"], record["amount"], quoteQty, tick, isBuyerMaker]
+            data_lst.append(data)
+        return data_lst
