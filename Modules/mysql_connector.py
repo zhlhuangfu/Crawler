@@ -6,12 +6,12 @@ from tqdm import tqdm
 import mysql.connector as mq
 
 
-class MySQLConnector():
+class BaseMySQLConnector():
     """Base abstract to connect to MySQL"""
 
     def __init__(self, db_name):
         """Init"""
-        self.db = MySQLConnector.create_connection()
+        self.db = BaseMySQLConnector.create_connection()
         self.create_database(db_name)
 
     def create_database(self, db_name):
@@ -64,7 +64,7 @@ class MySQLConnector():
         self.db.close()
 
 
-class CryptoCoinConnector(MySQLConnector):
+class CryptoCoinConnector(BaseMySQLConnector):
     """Extended class for crawling CryptoCoin"""
 
     def create_meta_table(self):
