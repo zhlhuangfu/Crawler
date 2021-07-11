@@ -177,6 +177,8 @@ class HuobiKoreaTradeDataCrawler(BaseExchangeCrawler):
         return json.loads(response.text)
     
     def write_into_db(self, res_data, symbol):
+        if res_data["status"] == "error":
+            return
         data_lst = []
         for item in res_data["data"]:
             for record in item["data"]:
@@ -214,6 +216,8 @@ class ProBitGlobalTradeDataCrawler(BaseExchangeCrawler):
         return json.loads(response.text)
     
     def write_into_db(self, res_data, symbol):
+        if len(res_data["data"]) == 0:
+            return
         data_lst = []
         for record in res_data["data"]:
             data = [self.exch_name]
@@ -419,5 +423,32 @@ class CoinDCXTradeDataCrawler(BaseExchangeCrawler):
             quoteQty = float(record["p"]) * float(record["q"])
             data += [trade_id, record["p"], record["q"], quoteQty,  record["T"], record["m"]]
             data[5] = int(int(data[5]) / 1000)
+            data_lst.append(data)
+        self.connector.insert_trade_data(data_lst, symbol)
+
+class BigONETradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(BigONETradeDataCrawler, self).__init__(db_name, interval, symbols, "bigone")
+        self.url = "https://big.one/api/v3/asset_pairs/{}/trades"
+    
+    def transform_symbol(self, symbol):
+        return symbol[:-4] + "-" + "USDT"
+    
+    def request_data(self, symbol):
+        url = self.url.format(symbol)
+        response = requests.get(url)
+        return json.loads(response.text)
+    
+    def write_into_db(self, res_data, symbol):
+        if res_data["code"] != 0:
+            return
+        data_lst = []
+        for record in res_data["data"]:
+            data = [self.exch_name]
+            quoteQty = float(record["price"]) * float(record["amount"])
+            isBuyerMaker = True if record["taker_side"] == "ASK" else False
+            d = datetime.datetime.strptime(record["created_at"], "%Y-%m-%dT%H:%M:%S.%fZ")
+            ts = int(d.timestamp())
+            data += [record["id"], record["price"], record["amount"], quoteQty, ts, isBuyerMaker]
             data_lst.append(data)
         self.connector.insert_trade_data(data_lst, symbol)

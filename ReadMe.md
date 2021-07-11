@@ -42,6 +42,7 @@
     |AcendEX|https://ascendex.com/api/pro/v1/trades?symbol={BTC/USDT}&n=50||60||
     |CoinDCX|https://public.coindcx.com/market_data/trade_history?pair={B-BTC_USDT}&limit=50||60||
     |FTX US|https://ftx.us/api/markets/{}/trades?start_time={}&end_time={}|30 requests per second|60|have no market of BNBUSDT, ADAUSDT, DOTUSDT|
+    |Bittrex|https://big.one/api/v3/asset_pairs/BTC-USDT/trades|for a single ip: 500 requests per 10 seconds|60|returns the latest 50 trades|
     |CoinCheck|---|---|---|Only supports jpy|
     |Zaif|---|---|---|Only supports jpy|
     |Upbit|---|---|---|Only supports krw|

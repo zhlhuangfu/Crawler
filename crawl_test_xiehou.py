@@ -29,17 +29,18 @@ import json
 # # print(int(t))
 
 
-# url = "https://api.bittrex.com/v3/markets/BTC-USDT/trades"
+# url = "https://api-cloud.huobi.co.kr/market/history/trade?symbol=bnbusdt&size=500"
 
-# # utc_tz = pytz.timezone('UTC')
-# # starttime = datetime.datetime.now(tz = utc_tz)-datetime.timedelta(minutes=1)
-# # start = int(starttime.timestamp())
+utc_tz = pytz.timezone('UTC')
+# # # starttime = datetime.datetime.now(tz = utc_tz)-datetime.timedelta(minutes=1)
+# # # start = int(starttime.timestamp())
 
-# # endtime = datetime.datetime.now(tz = utc_tz)
-# # end = int(endtime.timestamp())
+# # # endtime = datetime.datetime.now(tz = utc_tz)
+# # # end = int(endtime.timestamp())
 
-# # url = url.format(start, end)
+# # # url = url.format(start, end)
 # response = requests.get(url)
+# print(response.text)
 
 # j = json.loads(response.text)
 # time = j[0]["executedAt"][0:19]
@@ -47,37 +48,15 @@ import json
 # # ts = int(d.timestamp())
 # print(time)
 
-from Modules.mysql_connector import CryptoCoinConnector
-
-db_name = "trade_info"
-MySQLConnector = CryptoCoinConnector(db_name)
-
+url = "https://ftx.us/api/markets/BAC/USDT/trades?start_time={}&end_time={}"
 utc_tz = pytz.timezone('UTC')
-starttime = datetime.datetime.now(tz = utc_tz)-datetime.timedelta(minutes=1)
+starttime = datetime.datetime.now(tz = utc_tz)-datetime.timedelta(minutes=5) - datetime.timedelta(seconds=5)
 start = int(starttime.timestamp())
+
 endtime = datetime.datetime.now(tz = utc_tz)
 end = int(endtime.timestamp())
 
-symbol = "BTCUSDT"
-
-trades = MySQLConnector.look_up_trade_info(symbol, start, end)
-
-P1 = 0
-Q1 = 0
-P2 = 0
-Q2 = 0
-for trade in trades:
-    p = trade[2]
-    q = trade[3]
-
-    P1 = P1 + p * q
-    Q1 = Q1 + q
-
-    P2 = P2 + p * p * q
-    Q2 = Q2 + p * q
-
-Price1 = P1 / Q1
-Price2 = P2 / Q2
-
-print(Price1)
-print(Price2)
+url = url.format(start, end)
+response = requests.get(url)
+j = json.loads(response.text)
+print(j)
