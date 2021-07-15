@@ -83,7 +83,7 @@ class BaseExchangeCrawler(BaseCrawler):
         response = requests.get(url)
         return json.loads(response.text)
 
-    def parse_data(self, data):
+    def parse_data(self, data, *kwargs):
         raise NotImplementedError
     
     def write_into_db(self, data_lst, symbol):
@@ -498,7 +498,6 @@ class BitfinexTradeDataCrawler(BaseExchangeCrawler):
     
     def transform_symbol(self, symbol):
         return "t" + symbol[:-1]
-    
 
     def construct_url(self, symbol):
         end_time = time.time()
@@ -688,5 +687,290 @@ class BitexenTradeDataCrawler(BaseExchangeCrawler):
             quoteQty = float(record["amount"]) * float(record["price"])
             isBuyerMaker = True if record["type"] == "B" else False
             data += [tid, record["price"], record["amount"], quoteQty, tick, isBuyerMaker]
+            data_lst.append(data)
+        return data_lst
+    
+class LBankTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(LBankTradeDataCrawler, self).__init__(db_name, interval, symbols, "lbank")
+        self.url = "https://api.lbkex.com/v2/trades.do?symbol={}&size=600&time={}"
+    def transform_symbol(self, symbol):
+        return symbol[:-4].lower() + "_" + symbol[-4:].lower()
+
+    def construct_url(self, symbol):
+        now = time.time()
+        start_time = int((now - 60 * 1.5) * 1000)
+        url = self.url.format(symbol, start_time)
+        return url
+    
+    def parse_data(self, res_data):
+        # {"date_ms":1626053370020,"amount":0.1022,"price":34154.29,"type":"sell","tid":"742d9f93c09549079dbaaac7595d4c03"}
+        if res_data["result"] == "false":
+            return
+
+        data_lst = []
+        
+        for record in res_data["data"]:
+            data = [self.exch_name]
+            quoteQty = float(record["price"]) * float(record["amount"])
+            tick = int(record["date_ms"] / 1000)
+            isBuyerMaker = True if record["type"] == "buy" else False
+            data += [record["tid"], record["price"], record["amount"], quoteQty, tick, isBuyerMaker]
+            data_lst.append(data)
+        
+        return data_lst
+    
+
+class ItBitTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(ItBitTradeDataCrawler, self).__init__(db_name, interval, symbols, "itBit")
+        self.url = "https://api.paxos.com/v2/markets/{}/recent-executions"
+    
+    def transform_symbol(self, symbol):
+        return symbol[:-1]
+    
+    def parse_data(self, res_data):
+        if "title" in res_data.keys():
+            return
+        # {"match_number":"61Y8IHZWWSEO","price":"34201.75","amount":"0.0029092","executed_at":"2021-07-12T02:16:53.446Z"}
+        date2tick = lambda time_str: time.mktime(datetime.datetime.strptime(time_str,
+                                       r"%Y-%m-%d %H:%M:%S").timetuple())
+        data_lst = []
+        for record in res_data["items"]:
+            data = [self.exch_name]
+            quoteQty = float(record["price"]) * float(record["amount"])
+            time_str = record["executed_at"].split(".")[0].replace("Z", "").replace("T", " ")
+            tick = date2tick(time_str)
+            data += [record["match_number"], record["price"], record["amount"], quoteQty, tick, None]
+            data_lst.append(data)
+        return data_lst
+
+
+class CoinEXTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(CoinEXTradeDataCrawler, self).__init__(db_name, interval, symbols, "coinEx")
+        self.url = "https://api.coinex.com/v1/market/deals?market={}&limit=1000"
+    
+    def parse_data(self, res_data):
+        if len(res_data["data"]) == 0:
+            return
+        # {"id": 2387239331, "type": "buy", "price": "34202.12", "amount": "0.00096480", "date": 1626057780, "date_ms": 1626057780796}
+        
+        data_lst = []
+        for record in res_data["data"]:
+            data = [self.exch_name]
+            quoteQty = float(record["amount"]) * float(record["price"])
+            isBuyerMaker = True if record["type"] == "buy" else False
+            data += [record["id"], record["price"], record["amount"], quoteQty, record["date"], isBuyerMaker]
+            data_lst.append(data)
+        return data_lst
+
+
+class CEXIOTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(CEXIOTradeDataCrawler, self).__init__(db_name, interval, symbols, "cex.io")
+        self.url = "https://cex.io/api/trade_history/{}/"
+    
+    def transform_symbol(self, symbol):
+        return symbol[:-4] + "/" + symbol[-4:]
+    
+    def parse_data(self, res_data):
+        if isinstance(res_data, dict):
+            return 
+        data_lst = []
+        for record in res_data:
+            # {"type":"buy","date":"1626136304","amount":"0.770183","price":"14.956","tid":"26621"}
+            data = [self.exch_name]
+            isBuyerMaker = True if record["type"] == "buy" else False
+            quoteQty = float(record["amount"]) * float(record["price"])
+            data += [record["tid"], record["price"], record["amount"], quoteQty, record["date"], isBuyerMaker]
+            data_lst.append(data)
+        return data_lst
+
+
+class DexTradeTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(DexTradeTradeDataCrawler, self).__init__(db_name, interval, symbols, "dex-trade")
+        self.url = "https://api.dex-trade.com/v1/public/trades?pair={}"
+    
+    def parse_data(self, res_data):
+        if not res_data["status"]:
+            return
+        # {"volume":0.008029,"rate":32978.74,"price":264.78630346,"timestamp":1626139474,"type":"SELL"}
+        data_lst = []
+        for record in res_data["data"]:
+            data = [self.exch_name]
+            isBuyerMaker = True if record["type"] == "BUY" else False
+            tid = str(record["timestamp"])
+            data += [tid, record["rate"], record["volume"], record["price"], record["timestamp"], isBuyerMaker]
+            data_lst.append(data)
+        
+        return data_lst
+
+
+class GokuMarketTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(GokuMarketTradeDataCrawler, self).__init__(db_name, interval, symbols, "gokumarket")
+        self.url = "https://publicapi.gokumarket.com/trades?currency_pair={}"
+    
+    def transform_symbol(self, symbol):
+        return symbol[:-4].lower() + "_" + symbol[-4:].lower()
+
+    def parse_data(self, res_data):
+        if len(res_data) == 0:
+            return
+        # {"base_volume":0.03654512,"price":33080.73,"quote_volume":1208.9392475376,"timestamp":1626140094644,"tradeID":"btc-usdt-partials-ef00da79-2d0d-4c48-95d8-2ce6dc8c5fd0","type":"sell"}
+        data_lst = []
+        for record in res_data:
+            data = [self.exch_name]
+            isBuyerMaker = True if record["type"] == "buy" else False
+            tick = int(record["timestamp"] / 1000)
+            data += [record["tradeID"], record["price"], record["base_volume"], record["quote_volume"], tick, isBuyerMaker]
+            data_lst.append(data)
+        return data_lst
+
+
+class EQONEXTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(EQONEXTradeDataCrawler, self).__init__(db_name, interval, symbols, "eqonex")
+        self.url = "https://eqonex.com/api/getTradeHistory?pairId={}"
+        self.pairDct = self.construct_dct()
+    
+    def construct_dct(self):
+        res = requests.get(url="https://eqonex.com/api/getInstrumentPairs")
+        jdata = json.loads(res.text)
+        dct = {}
+        for pair in jdata["instrumentPairs"]:
+            dct[pair[1]] = [pair[0], pair[4], pair[5]]
+        return dct
+
+    def transform_symbol(self, symbol):
+        key = symbol[:-4] + "/" + "USDC"
+        if key in self.pairDct.keys():
+            return self.pairDct[key][0]
+        else:
+            print("No pair of {}".format(symbol))
+            return -1
+    
+    def _kernel(self, symbol):
+        q_symbol = self.transform_symbol(symbol)
+        url = self.construct_url(q_symbol)
+        data = self.request_data(url)
+        data_lst = self.parse_data(data, symbol)
+        self.write_into_db(data_lst, symbol)
+    
+    def parse_data(self, res_data, symbol):
+        if "error" in res_data.keys():
+            return
+        data_lst = []
+        key = symbol[:-4] + "/" + "USDC"
+        # [9800,10000000,"20210712-17:50:56.560",5062921,2]
+        date2tick = lambda time_str: time.mktime(datetime.datetime.strptime(time_str,
+                                       r"%Y%m%d-%H:%M:%S").timetuple())
+        
+        for record in res_data["trades"]:
+            data = [self.exch_name]
+            price = float(record[0] / (10 ** self.pairDct[key][1]))
+            amount = float(record[1] / (10 **self.pairDct[key][2]))
+            quoteQty = price * amount
+            tick = date2tick(record[2].split(".")[0])
+            data += [record[3], price, amount, quoteQty, tick, 1 & record[4]]
+            data_lst.append(data)
+        return data_lst
+
+
+class AAXTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(AAXTradeDataCrawler, self).__init__(db_name, interval, symbols, "aax")
+        self.url = "https://api.aax.com/v2/market/trades?symbol={}&limit=1000"
+    
+    def parse_data(self, res_data):
+        if res_data["e"] == "empty":
+            return
+        # "trades":[{"p":"33186.18000000","q":"0.001400","t":1626144220719},
+        data_lst = []
+        for record in res_data["trades"]:
+            data = [self.exch_name]
+            tid = str(record["t"])
+            o_price = float(record["p"])
+            price = abs(o_price)
+            isBuyerMaker = True if o_price > 0 else False
+            tick = int(record["t"] / 1000)
+            q = float(record["q"])
+            quoteQty = price * q
+            data += [tid, price, q, quoteQty, tick, isBuyerMaker]
+            data_lst.append(data)
+        return data_lst
+
+
+class HitBTCTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(HitBTCTradeDataCrawler, self).__init__(db_name, interval, symbols, "hitbtc")
+        self.url = "https://api.hitbtc.com/api/2/public/trades/{}?from={}&till&limit=500"
+    
+    def transform_symbol(self, symbol):
+        return symbol[:-1]
+    
+    def construct_url(self, symbol):
+        now = time.time()
+        start = now - 60 * 1.5
+        start = int(start * 1000)
+        now = int(now * 1000)
+        return self.url.format(symbol, start, now)
+    
+    def parse_data(self, res_data):
+        if isinstance(res_data, dict) and "error" in res_data.keys():
+            return
+        data_lst = []
+        date2tick = lambda time_str: time.mktime(datetime.datetime.strptime(time_str,
+                                       r"%Y-%m-%d %H:%M:%S").timetuple())
+        # {"id":1317550278,"price":"33223.54","quantity":"0.00005","side":"buy","timestamp":"2021-07-13T03:28:38.289Z"}
+        for record in res_data:
+            # pdb.set_trace()
+            data = [self.exch_name]
+            quoteQty = float(record["price"]) * float(record["quantity"])
+            isBuyerMaker = True if record["side"] == "buy" else False
+            tick = record["timestamp"].split(".")[0].replace("Z", "").replace("T", " ")
+            tick = date2tick(tick)
+            data += [record["id"], record["price"], record["quantity"], quoteQty, tick, isBuyerMaker]
+            data_lst.append(data)
+        return data_lst
+
+
+class ParitexTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(ParitexTradeDataCrawler, self).__init__(db_name, interval, symbols, "paritex")
+        self.url = "https://www.paritex.com/gateway/api-auth/api-tradeservice/api/v1/public/trade?symbol={}&limit=100"
+    
+    def request_data(self, url):
+        s = requests.Session()
+
+        cookie_dict = {
+            "49BAC005-7D5B-4231-8CEA-16939BEACD67": "cktest001",
+            "JSESSIONID": "F4FFF69B8XXXXXXC8DCB4C061C0",
+            "JSESSIONIDSSO": "9D49C76FD6XXXXXF294242B44A",
+        }
+        # 把cookie值转换为cookiejar类型，然后传给Session
+        s.cookies = requests.utils.cookiejar_from_dict(
+                    cookie_dict, cookiejar=None, overwrite=True
+                    )
+        response = s.get(url=url)
+        pdb.set_trace()
+        return json.loads(response.text)
+
+    def parse_data(self, res_data):
+        if len(res_data["data"]) == 0:
+            return
+        data_lst = []
+        pdb.set_trace()
+        date2tick = lambda time_str: time.mktime(datetime.datetime.strptime(time_str,
+                                       r"%Y-%m-%d %H:%M:%S").timetuple())
+        for record in res_data["data"]:
+            # {"tradeId":69979420,"quantity":0.01498300,"price":33091.66000000,"createdOn":"2021-07-13T04:07:34.000+0000"}
+            data = [self.exch_name]
+            quoteQty = float(record["price"]) * float(record["quantity"])
+            tick = record["createdOn"].split(".")[0].replace("T", " ")
+            tick = date2tick(tick)
+            data += [record["tradeId"], record["price"], record["quantity"], quoteQty, tick, None]
             data_lst.append(data)
         return data_lst

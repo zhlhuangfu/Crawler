@@ -49,3 +49,19 @@
 |[Gemini](https://docs.gemini.com/rest-api/#two-factor-authentication) | https://api.gemini.com/v1/trades/btcusd | 120 requests per minute |
 |[coinone](https://coinone.co.kr/exchange/trade/btc/krw) | - | - | -| It only contains KRW not USD, ignore|
 |[Poloniex](https://docs.poloniex.com/#returntradehistory-public) | https://poloniex.com/public?command=returnTradeHistory&currencyPair=USDT_BTC&start=1610158341&end=1610499372 |  6 calls per second | 
+|[Bitexen](http://docs.bitexen.com/)| https://www.bitexen.com/api/v1/order_book/BTCUSDT/ | 60 requests/min|
+|[LBank](https://docs.lbkex.net/en/#url) | https://api.lbkex.com/v2/trades.do?symbol=btc_usdt&size=600 | 200 requests/10s |
+|[ItBit](https://developer.paxos.com/docs/v2/api#tag/Orders) | https://api.paxos.com/v2/markets/BTCUSD/recent-executions
+|[CoinEX](https://github.com/coinexcom/coinex_exchange_api/wiki/023deals) | https://api.coinex.com/v1/market/deals?market=BCHBTC| NA |
+|[bitkub](https://www.bitkub.com/market/BTC)| - | - | - | It is a exchange for Thailand. Only sport THB, not USD or USDT|
+|[bitbank](https://app.bitbank.cc/trade)| - | - | - | Only suppeort JPY |
+|[CoinBit](https://www.coinbit.co.kr/)| - | - | - | Only KRW |
+|[BitWell](https://bitwell-tech.github.io/oapi/#spot_matches) | https://openapi.bitwellex.com/pub/openapi/v1/hq/transaction?symbol=ETH_USDT | - | - | It only provised the latest transaction. We cannot have the recent transaction record.
+|[CEX.io](https://cex.io/rest-api#trade-history) | https://cex.io/api/trade_history/BTC/USDT/ | 
+|[Dex-Trade](https://docs.dex-trade.com/#api-Public_API-Trade_History) | https://api.dex-trade.com/v1/public/trades?pair=ETHUSDT | NA | 
+|[gokumarket](https://dev.gokumarket.com/#/Trades/trades) | https://publicapi.gokumarket.com/trades?currency_pair=btc_usdt | 
+|[EQONEX](https://developer.eqonex.com/#get-instrument-pairs) | https://eqonex.com/api/getTradeHistory?pairId={} | NA | 
+| [AAX](https://www.aax.com/apidoc/index.html#rate-limits)| https://api.aax.com/v2/market/trades?symbol=BTCUSDT&limit=10 |10 / s, 150/min, 5000/h|
+|[HitBTC](https://api.hitbtc.com/#rate-limiting) | https://api.hitbtc.com/api/2/public/trades/ETHBTC?sort=DESC | 10 request / s|
+
+
