@@ -101,10 +101,11 @@ class BaseExchangeCrawler(BaseCrawler):
         while True:
             print_write_data()
             for symbol in self.symbols:
-                try:
-                    self._kernel(symbol)
-                except:
-                    self.handle_network_issue(self._kernel, symbol)
+                self._kernel(symbol)
+                # try:
+                #     self._kernel(symbol)
+                # except:
+                #     self.handle_network_issue(self._kernel, symbol)
             print_sleep(self.interval)
             if test_flag:
                 break
@@ -182,6 +183,8 @@ class HuobiKoreaTradeDataCrawler(BaseExchangeCrawler):
         return symbol.lower()
     
     def parse_data(self, res_data):
+        if res_data["status"] != "ok":
+            return
         data_lst = []
         for item in res_data["data"]:
             for record in item["data"]:
@@ -248,6 +251,8 @@ class FTXUSTradeDataCrawler(BaseExchangeCrawler):
         return self.url.format(symbol, start, end)
 
     def parse_data(self, res_data):
+        if res_data["success"] != True:
+            return
         data_lst = []
         for record in res_data["result"]:
             data = [self.exch_name]
@@ -292,6 +297,8 @@ class OKExTradeDataCrawler(BaseExchangeCrawler):
         return symbol[:-4] + "-" + "USDT"
     
     def parse_data(self, res_data):
+        if "error_message" in res_data:
+            return
         data_lst = []
         for record in res_data:
             data = [self.exch_name]
@@ -319,8 +326,6 @@ class LiquidTradeDataCrawler(BaseExchangeCrawler):
             if record["currency_pair_code"] == symbol:
                 product_id = record["id"]
 
-        if product_id == -1:
-            print(product_id)
         return product_id
     
     def construct_url(self, symbol):
@@ -330,6 +335,8 @@ class LiquidTradeDataCrawler(BaseExchangeCrawler):
         return self.url.format(symbol, ts)
     
     def parse_data(self, res_data):
+        if "message" in res_data and res_data["message"] == "Product not found":
+            return
         data_lst = []
         for record in res_data:
             data = [self.exch_name]
@@ -347,7 +354,7 @@ class CryptoComExchangeTradeDataCrawler(BaseExchangeCrawler):
     def transform_symbol(self, symbol):
         return symbol[:-4] + "_" + "USDT"
     
-    def parse_data(self, res_data, symbol):
+    def parse_data(self, res_data):
         data_lst = []
         for record in res_data["result"]["data"]:
             data = [self.exch_name]
@@ -367,6 +374,8 @@ class AscendEXTradeDataCrawler(BaseExchangeCrawler):
         return symbol[:-4] + "/" + "USDT"
     
     def parse_data(self, res_data):
+        if "data" not in res_data:
+            return
         data_lst = []
         for record in res_data["data"]["data"]:
             data = [self.exch_name]
@@ -396,7 +405,7 @@ class CoinDCXTradeDataCrawler(BaseExchangeCrawler):
         data_lst = []
         for record in res_data:
             data = [self.exch_name]
-            trade_id = symbol + str(record["T"]) + str(record["q"])
+            trade_id = str(record["T"]) + str(record["q"])
             quoteQty = float(record["p"]) * float(record["q"])
             data += [trade_id, record["p"], record["q"], quoteQty,  record["T"], record["m"]]
             data[5] = int(int(data[5]) / 1000)
@@ -972,5 +981,213 @@ class ParitexTradeDataCrawler(BaseExchangeCrawler):
             tick = record["createdOn"].split(".")[0].replace("T", " ")
             tick = date2tick(tick)
             data += [record["tradeId"], record["price"], record["quantity"], quoteQty, tick, None]
+            data_lst.append(data)
+        return data_lst
+
+class BigONETradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(BigONETradeDataCrawler, self).__init__(db_name, interval, symbols, "bigone")
+        self.url = "https://big.one/api/v3/asset_pairs/{}/trades"
+
+    def transform_symbol(self, symbol):
+        return symbol[:-4] + "-" + "USDT"
+
+    def parse_data(self, res_data):
+        if res_data["error"] == "invalid_pair":
+            return
+        data_lst = []
+        for record in res_data["data"]:
+            data = [self.exch_name]
+            quoteQty = float(record["price"]) * float(record["amount"])
+            isBuyerMaker = True if record["taker_side"] == "BID" else False
+            d = datetime.datetime.strptime(record["created_at"][0:19], "%Y-%m-%dT%H:%M:%S")
+            ts = int(d.timestamp())
+            data += [record["id"], record["price"], record["amount"], quoteQty, ts, isBuyerMaker]
+            data_lst.append(data)
+        return data_lst
+
+class IndodaxTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(IndodaxTradeDataCrawler, self).__init__(db_name, interval, symbols, "indodax")
+        self.url = "https://indodax.com/api/trades/{}"
+
+    def transform_symbol(self, symbol):
+        return symbol.lower()
+
+    def parse_data(self, res_data):
+        data_lst = []
+        if "error" in res_data:
+            return
+        for record in res_data:
+            data = [self.exch_name]
+            quoteQty = float(record["price"]) * float(record["amount"])
+            isBuyerMaker = True if record["type"] == "buy" else False
+            data += [record["tid"], record["price"], record["amount"], quoteQty, record["date"], isBuyerMaker]
+            data_lst.append(data)
+        return data_lst
+
+class OkcoinTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(OkcoinTradeDataCrawler, self).__init__(db_name, interval, symbols, "okcoin")
+        self.url = "https://www.okcoin.com/api/spot/v3/instruments/{}/trades?limit=100"
+
+    def transform_symbol(self, symbol):
+        return symbol[:-4] + "-" + "USDT"
+
+    def parse_data(self, res_data):
+        if "error_message" in res_data:
+            return
+        data_lst = []
+        for record in res_data:
+            data = [self.exch_name]
+            quoteQty = float(record["price"]) * float(record["size"])
+            isBuyerMaker = True if record["side"] == "buy" else False
+            d = datetime.datetime.strptime(record["timestamp"][0:19], "%Y-%m-%dT%H:%M:%S")
+            ts = int(d.timestamp())
+            data += [record["trade_id"], record["price"], record["size"], quoteQty, ts, isBuyerMaker]
+            data_lst.append(data)
+        return data_lst
+
+class EXMOTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(EXMOTradeDataCrawler, self).__init__(db_name, interval, symbols, "exmo")
+        self.url = "https://api.exmo.com/v1.1/trades?pair={}"
+
+    def transform_symbol(self, symbol):
+        return symbol[:-4] + "_" + "USDT"
+
+    def parse_data(self, res_data):
+        if not isinstance(res_data, dict) or len(res_data) == 0:
+            return
+        data_lst = []
+        symbol = ""
+        for key in res_data:
+            symbol = key
+        for record in res_data[symbol]:
+            data = [self.exch_name]
+            isBuyerMaker = True if record["type"] == "buy" else False
+            data += [record["trade_id"], record["price"], record["quantity"], record["amount"], record["date"], isBuyerMaker]
+            data_lst.append(data)
+        return data_lst
+
+class BithumbGlobalTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(BithumbGlobalTradeDataCrawler, self).__init__(db_name, interval, symbols, "bithumbglobal")
+        self.url = "https://global-openapi.bithumb.pro/openapi/v1/spot/trades?symbol={}"
+
+    def transform_symbol(self, symbol):
+        return symbol[:-4] + "-" + "USDT"
+
+    def parse_data(self, res_data):
+        if res_data["code"] != "0":
+            return
+        data_lst = []
+        for record in res_data["data"]:
+            data = [self.exch_name]
+            quoteQty = float(record["p"]) * float(record["v"])
+            isBuyerMaker = True if record["s"] == "buy" else False
+            data += [record["ver"], record["p"], record["v"], quoteQty, record["t"], isBuyerMaker]
+            data_lst.append(data)
+        return data_lst
+
+class BtcTurkProTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(BtcTurkProTradeDataCrawler, self).__init__(db_name, interval, symbols, "btcturkpro")
+        self.url = "https://api.btcturk.com/api/v2/trades?pairSymbol={}"
+
+    def transform_symbol(self, symbol):
+        return symbol[:-4] + "_" + "USDT"
+
+    def parse_data(self, res_data):
+        if res_data["success"] == False:
+            return
+        data_lst = []
+        for record in res_data["data"]:
+            data = [self.exch_name]
+            quoteQty = float(record["price"]) * float(record["amount"])
+            isBuyerMaker = True if record["side"] == "buy" else False
+            data += [record["tid"], record["price"], record["amount"], quoteQty, record["date"], isBuyerMaker]
+            data[5] = int(data[5] / 1000)
+            data_lst.append(data)
+        return data_lst
+
+class WootradeTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(WootradeTradeDataCrawler, self).__init__(db_name, interval, symbols, "wootrade")
+        self.url = "https://api.woo.network/v1/public/market_trades?symbol={}&limit=50"
+
+    def transform_symbol(self, symbol):
+        return "SPOT_" + symbol[:-4] + "_" + "USDT"
+
+    def parse_data(self, res_data):
+        data_lst = []
+        for record in res_data["rows"]:
+            data = [self.exch_name]
+            quoteQty = float(record["executed_price"]) * float(record["executed_quantity"])
+            isBuyerMaker = True if record["side"] == "BUY" else False
+            ts = str(record["executed_timestamp"])
+            ts = ts[0:10]
+            ts = int(ts)
+            tid = str(record["executed_price"]) + str(record["executed_quantity"]) + str(record["executed_timestamp"])
+            data += [tid, record["executed_price"], record["executed_quantity"], quoteQty, ts, isBuyerMaker]
+            data_lst.append(data)
+        return data_lst
+
+class BitfrontTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(BitfrontTradeDataCrawler, self).__init__(db_name, interval, symbols, "bitfront")
+        self.url = "https://openapi.bitfront.me/v1/market/public/tradeHistory?coinPair={}&max=50"
+
+    def transform_symbol(self, symbol):
+        return symbol[:-4] + "." + "USDT"
+
+    def parse_data(self, res_data):
+        if res_data["statusMessage"] != "SUCCESS":
+            return
+        data_lst = []
+        for record in res_data["responseData"]:
+            data = [self.exch_name]
+            isBuyerMaker = True if record["orderSide"] == "BUY" else False
+            data += [record["transactionID"], record["price"], record["amount"], record["totalValue"], record["createdAt"], isBuyerMaker]
+            data[5] = int(data[5] / 1000)
+            data_lst.append(data)
+        return data_lst
+
+class ZBcomTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(ZBcomTradeDataCrawler, self).__init__(db_name, interval, symbols, "zbcom")
+        self.url = "https://api.zb.land/data/v1/trades?market={}"
+
+    def transform_symbol(self, symbol):
+        return symbol[:-4].lower() + "_" + "usdt"
+
+    def parse_data(self, res_data):
+        if "error" in res_data:
+            return
+        data_lst = []
+        for record in res_data:
+            data = [self.exch_name]
+            isBuyerMaker = True if record["type"] == "buy" else False
+            quoteQty = float(record["price"]) * float(record["amount"])
+            data += [record["tid"], record["price"], record["amount"], quoteQty, record["date"], isBuyerMaker]
+            data_lst.append(data)
+        return data_lst
+
+class CoinlistProTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(CoinlistProTradeDataCrawler, self).__init__(db_name, interval, symbols, "coinlistpro")
+        self.url = "https://trade-api.coinlist.co/v1/symbols/{}/auctions"
+
+    def transform_symbol(self, symbol):
+        return symbol[:-4] + "-" + "USDT"
+
+    def parse_data(self, res_data):
+        data_lst = []
+        for record in res_data["auctions"]:
+            data = [self.exch_name]
+            quoteQty = float(record["price"]) * float(record["volume"])
+            d = datetime.datetime.strptime(record["logical_time"][0:19], "%Y-%m-%dT%H:%M:%S")
+            ts = int(d.timestamp())
+            data += [record["auction_code"], record["price"], record["volume"], quoteQty, ts, None]
             data_lst.append(data)
         return data_lst
