@@ -151,6 +151,7 @@ class FTXUSHistoryTradeDataCrawler(BaseExchangeHistoryCrawler):
 
         size = len(res_data["result"])
         if size != 0:
+            # find the smallest timestamp to be the new end_timestamp
             new_end_time = res_data["result"][-1]["time"][0:19]
             d = datetime.datetime.strptime(new_end_time, "%Y-%m-%dT%H:%M:%S")
             end_timestamp = int(d.timestamp())
