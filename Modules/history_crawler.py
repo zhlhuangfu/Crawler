@@ -96,7 +96,7 @@ class BaseExchangeHistoryCrawler(BaseCrawler):
     def run(self, test_flag=False):
         """Kernel function"""
 
-        i = 0
+        i = 1
         for symbol in self.symbols:
             start_timestamp = self.start_timestamp
             end_timestamp = self.end_timestamp
@@ -106,13 +106,13 @@ class BaseExchangeHistoryCrawler(BaseCrawler):
                     time.sleep(self.interval)
                     print_sleep(self.interval)
                 
-                start_timestamp, end_timestamp, size = self._kernel(symbol, start_timestamp, end_timestamp)
-                if size == 0:
-                    break
-                # try:
-                #     self._kernel(symbol)
-                # except:
-                #     self.handle_network_issue(self._kernel, symbol)
+            
+                try:
+                    start_timestamp, end_timestamp, size = self._kernel(symbol, start_timestamp, end_timestamp)
+                    if size == 0:
+                        break
+                except:
+                    self.handle_network_issue(self._kernel, symbol)
                 
                 if test_flag:
                     break
@@ -130,9 +130,6 @@ class FTXUSHistoryTradeDataCrawler(BaseExchangeHistoryCrawler):
     
     def transform_symbol(self, symbol):
         return symbol[:-4] + "/" + "USD"
-    
-    def construct_url(self, symbol, start_timestamp, end_timestamp):
-        return self.url.format(symbol, start_timestamp, end_timestamp)
 
     def parse_data(self, res_data, start_timestamp, end_timestamp):
         data_lst = []
