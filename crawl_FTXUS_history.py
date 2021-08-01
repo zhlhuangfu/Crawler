@@ -2,10 +2,10 @@ import pdb
 import json
 import argparse
 
-from Modules.history_crawler import FTXUSHistoryTradeDataCrawler
+from Modules.history_crawler import BinanceHistoryTradeDataCrawler
 
 
-db_name = "xiehou_history_test"
-symbols = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "ADAUSDT", "DOGEUSDT", "XRPUSDT", "LTCUSDT", "DOTUSDT", "UNIUSDT", "BCHUSDT"]
-spider = FTXUSHistoryTradeDataCrawler(db_name, symbols)
+db_name = "history_trades"
+symbols = ["BTC_USDT", "ETH_USDT", "BNB_USDT", "ADA_USDT", "DOGE_USDT", "XRP_USDT", "LTC_USDT", "DOT_USDT", "UNI_USDT", "BCH_USDT"]
+spider = BinanceHistoryTradeDataCrawler(db_name, symbols)
 spider.run()
