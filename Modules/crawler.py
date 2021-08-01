@@ -1293,3 +1293,24 @@ class CoinlistProTradeDataCrawler(BaseExchangeCrawler):
             data += [record["auction_code"], record["price"], record["volume"], quoteQty, ts, None]
             data_lst.append(data)
         return data_lst
+
+class PairbuTradeDataCrawler(BaseExchangeCrawler):
+    def __init__(self, db_name, interval, symbols):
+        super(PairbuTradeDataCrawler, self).__init__(db_name, interval, symbols, "pairbu")
+        self.url = "https://v3.paribu.com/app/markets/{}?interval=1000"
+
+    def transform_symbol(self, symbol):
+        return symbol[:-4].lower() + "-" + "usdt"
+
+    def parse_data(self, res_data):
+        if res_data["success"] == False:
+            return
+        data_lst = []
+        for record in res_data["data"]["marketMatches"]:
+            data = [self.exch_name]
+            isBuyerMaker = True if record["trade"] == "buy" else False
+            quoteQty = float(record["price"]) * float(record["amount"])
+            tid = str(record["timestamp"]) + str(record["price"]) + str(record["amount"])
+            data += [tid, record["price"], record["amount"], quoteQty, record["timestamp"], isBuyerMaker]
+            data_lst.append(data)
+        return data_lst
