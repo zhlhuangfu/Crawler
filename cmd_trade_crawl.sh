@@ -5,7 +5,9 @@ process_name="crawl_trades_from_exchs.py"
 function start(){
     echo "start..."
     exchs=(binance binance.us bitfinex bitflyer bitstamp coinbase ftx gate.io gemini huobi kraken kucoin poloniex 
-            ascendEx bittrex coinDCX cryptoComExchange ftxUS huobiKorea liquid OKEx proBitGlobal)
+            ascendEX bittrex coinDCX cryptoComExchange ftxUS huobiKorea liquid OKEx proBitGlobal
+            Lbank ItBit CoinEX CEXIO Dex GokuMarket EQONext AAX HitBTC
+            BigOne Indodax Okcoin EXMO BithumbGlobal  BtcTurkPro Wootrade Bitfront ZBcom CoinlistPro)
     for name in ${exchs[*]}; 
     do 
         log_name="logs/crawl_from_${name}.log"

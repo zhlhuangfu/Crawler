@@ -10,7 +10,13 @@ from Modules.crawler import (
     PoloniexTradeDataCrawler, 
     AscendEXTradeDataCrawler, BittrexTradeDataCrawler,
     CoinDCXTradeDataCrawler, CryptoComExchangeTradeDataCrawler, FTXUSTradeDataCrawler,
-    HuobiKoreaTradeDataCrawler, LiquidTradeDataCrawler, OKExTradeDataCrawler, ProBitGlobalTradeDataCrawler
+    HuobiKoreaTradeDataCrawler, LiquidTradeDataCrawler, OKExTradeDataCrawler, ProBitGlobalTradeDataCrawler,
+
+    LBankTradeDataCrawler, ItBitTradeDataCrawler, CoinEXTradeDataCrawler, CEXIOTradeDataCrawler,
+    DexTradeTradeDataCrawler, GokuMarketTradeDataCrawler, EQONEXTradeDataCrawler, AAXTradeDataCrawler,
+    HitBTCTradeDataCrawler, BigONETradeDataCrawler, IndodaxTradeDataCrawler, OkcoinTradeDataCrawler,
+    EXMOTradeDataCrawler, BithumbGlobalTradeDataCrawler, BtcTurkProTradeDataCrawler,
+    WootradeTradeDataCrawler, BitfrontTradeDataCrawler, ZBcomTradeDataCrawler, CoinlistProTradeDataCrawler
     )
 
 exch_dct = {
@@ -27,7 +33,7 @@ exch_dct = {
     "kraken": KrakenTradeDataCrawler,
     "kucoin": KucoinTradeDataCrawler,
     "poloniex": PoloniexTradeDataCrawler,
-    "ascendEX" : AscendEXTradeDataCrawler,
+    "ascendEX": AscendEXTradeDataCrawler,
     "bittrex": BittrexTradeDataCrawler,
     "coinDCX": CoinDCXTradeDataCrawler,
     "cryptoComExchange": CryptoComExchangeTradeDataCrawler,
@@ -35,7 +41,27 @@ exch_dct = {
     "huobiKorea": HuobiKoreaTradeDataCrawler,
     "liquid": LiquidTradeDataCrawler,
     "OKEx": OKExTradeDataCrawler,
-    "proBitGlobal": ProBitGlobalTradeDataCrawler
+    "proBitGlobal": ProBitGlobalTradeDataCrawler,
+
+    "Lbank":LBankTradeDataCrawler,
+    "ItBit":ItBitTradeDataCrawler,
+    "CoinEX": CoinEXTradeDataCrawler,
+    "CEXIO": CEXIOTradeDataCrawler,
+    "Dex": DexTradeTradeDataCrawler,
+    "GokuMarket": GokuMarketTradeDataCrawler,
+    "EQONext": EQONEXTradeDataCrawler,
+    "AAX": AAXTradeDataCrawler,
+    "HitBTC": HitBTCTradeDataCrawler,
+    "BigOne": BigONETradeDataCrawler,
+    "Indodax": IndodaxTradeDataCrawler,
+    "Okcoin": OkcoinTradeDataCrawler,
+    "EXMO": EXMOTradeDataCrawler,
+    "BithumbGlobal": BithumbGlobalTradeDataCrawler,
+    "BtcTurkPro": BtcTurkProTradeDataCrawler,
+    "Wootrade": WootradeTradeDataCrawler,
+    "Bitfront": BitfrontTradeDataCrawler,
+    "ZBcom": ZBcomTradeDataCrawler,
+    "CoinlistPro": CoinlistProTradeDataCrawler
 }
 
 parser = argparse.ArgumentParser(description='Process some integers.')

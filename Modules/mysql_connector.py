@@ -1,5 +1,6 @@
 """This module is to help to connect mysql DB"""
 import pdb
+import time
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
@@ -101,8 +102,36 @@ class CryptoCoinConnector(BaseMySQLConnector):
         sql += " where time > %s and time < %s"
         return self.fetch_sql_res(sql, (start_time, end_time))
     
+    def look_up_trade_in_top_15(self, symbol, start_time, end_time, top_15):
+        table_name = "trade_of_{}".format(symbol)
+        sql = "SELECT * from "
+        sql += table_name
+        sql += " where time > %s and time < %s and exch_name in (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,  %s, %s, %s)"
+        return self.fetch_sql_res(sql, (start_time, end_time, 
+                            top_15[0], top_15[1], top_15[2], top_15[3], top_15[4], 
+                            top_15[5], top_15[6], top_15[7], top_15[8], top_15[9],
+                            top_15[10], top_15[11], top_15[12], top_15[13], top_15[14]))
+
+    def look_up_trade_by_exch(self, symbol, exch_name, start_time, end_time):
+        table_name = "trade_of_{}".format(symbol)
+        sql = "SELECT * from "
+        sql += table_name
+        sql += " where exch_name = %s and time > %s and time < %s"
+        return self.fetch_sql_res(sql, (exch_name, start_time, end_time))
+
     def look_up_meta(self):
         """Look up meta data"""
         sql = "SELECT * from coin_meta"
         return self.fetch_sql_res(sql, [])
     
+
+def InitTable(db_name, symbols, exch_names):
+    connector = CryptoCoinConnector(db_name)
+    connector.create_meta_table()
+    data = []
+    for exch_name in exch_names:
+        for symbol in symbols:
+            utctick = int(time.time())
+            data.append( (exch_name, symbol, utctick) )
+            connector.create_trade_info_table(symbol)
+    connector.insert_meta_data(data)
