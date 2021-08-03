@@ -55,10 +55,12 @@ class BaseCrawler():
 
 
 class BaseExchangeHistoryCrawler(BaseCrawler):
-    def __init__(self, db_name, symbols, exch_name):
+    def __init__(self, db_name, symbols, start_timestamp, end_timestamp, exch_name):
         super(BaseExchangeHistoryCrawler, self).__init__(db_name)
-        self.start_timestamp = 1532398889
-        self.end_timestamp = 1627006889
+        # self.start_timestamp = 1532398889
+        # self.end_timestamp = 1627006889
+        self.start_timestamp = start_timestamp
+        self.end_timestamp = end_timestamp
         self.exch_name = exch_name
         self.connector.create_meta_table()
 
@@ -128,8 +130,8 @@ class BaseExchangeHistoryCrawler(BaseCrawler):
         self.connector.close()
 
 class FTXUSHistoryTradeDataCrawler(BaseExchangeHistoryCrawler):
-    def __init__(self, db_name, symbols):
-        super(FTXUSHistoryTradeDataCrawler, self).__init__(db_name, symbols, "ftxus")
+    def __init__(self, db_name, symbols, start_timestamp, end_timestamp):
+        super(FTXUSHistoryTradeDataCrawler, self).__init__(db_name, symbols, start_timestamp, end_timestamp, "ftxus")
         self.url = "https://ftx.us/api/markets/{}/trades?start_time={}&end_time={}"
         self.rate_limit = 29
         self.interval = 1
@@ -163,8 +165,8 @@ class FTXUSHistoryTradeDataCrawler(BaseExchangeHistoryCrawler):
         return data_lst, start_timestamp, end_timestamp, size
 
 class FTXHistoryTradeDataCrawler(BaseExchangeHistoryCrawler):
-    def __init__(self, db_name, symbols):
-        super(FTXHistoryTradeDataCrawler, self).__init__(db_name, symbols, "ftx")
+    def __init__(self, db_name, symbols, start_timestamp, end_timestamp):
+        super(FTXHistoryTradeDataCrawler, self).__init__(db_name, symbols, start_timestamp, end_timestamp, "ftx")
         self.url = "https://ftx.com/api/markets/{}/trades?start_time={}&end_time={}"
         self.rate_limit = 29
         self.interval = 1
@@ -198,8 +200,8 @@ class FTXHistoryTradeDataCrawler(BaseExchangeHistoryCrawler):
         return data_lst, start_timestamp, end_timestamp, size
 
 class LiquidHistoryTradeDataCrawler(BaseExchangeHistoryCrawler):
-    def __init__(self, db_name, symbols):
-        super(LiquidHistoryTradeDataCrawler, self).__init__(db_name, symbols, "liquid")
+    def __init__(self, db_name, symbols, start_timestamp, end_timestamp):
+        super(LiquidHistoryTradeDataCrawler, self).__init__(db_name, symbols, start_timestamp, end_timestamp, "liquid")
         self.url = "https://api.liquid.com/executions?product_id={}&timestamp={}&limit=100"
         self.url_symbol_to_id = "https://api.liquid.com/products"
         self.rate_limit = 200
@@ -242,8 +244,8 @@ class LiquidHistoryTradeDataCrawler(BaseExchangeHistoryCrawler):
         return data_lst, start_timestamp, end_timestamp, size
 
 class BinanceHistoryTradeDataCrawler(BaseExchangeHistoryCrawler):
-    def __init__(self, db_name, symbols):
-        super(BinanceHistoryTradeDataCrawler, self).__init__(db_name, symbols, "binance")
+    def __init__(self, db_name, symbols, start_timestamp, end_timestamp):
+        super(BinanceHistoryTradeDataCrawler, self).__init__(db_name, symbols, start_timestamp, end_timestamp, "binance")
         self.url = "https://api1.binance.com/api/v3/klines?symbol={}&interval=1m&startTime={}&endTime={}"
         self.rate_limit = 29
         self.interval = 1
@@ -279,8 +281,8 @@ class BinanceHistoryTradeDataCrawler(BaseExchangeHistoryCrawler):
         return data_lst, start_timestamp, end_timestamp, size
 
 class KrakenHistoryTradeDataCrawler(BaseExchangeHistoryCrawler):
-    def __init__(self, db_name, symbols):
-        super(KrakenHistoryTradeDataCrawler, self).__init__(db_name, symbols, "kraken")
+    def __init__(self, db_name, symbols, start_timestamp, end_timestamp):
+        super(KrakenHistoryTradeDataCrawler, self).__init__(db_name, symbols, start_timestamp, end_timestamp, "kraken")
         self.url = "https://api.kraken.com/0/public/Trades?pair={}&since={}"
         self.rate_limit = 6
         self.interval = 45
@@ -318,8 +320,8 @@ class KrakenHistoryTradeDataCrawler(BaseExchangeHistoryCrawler):
         return data_lst, start_timestamp, end_timestamp, size
 
 class BitfinexHistoryTradeDataCrawler(BaseExchangeHistoryCrawler):
-    def __init__(self, db_name, symbols):
-        super(BitfinexHistoryTradeDataCrawler, self).__init__(db_name, symbols, "bitfinex")
+    def __init__(self, db_name, symbols, start_timestamp, end_timestamp):
+        super(BitfinexHistoryTradeDataCrawler, self).__init__(db_name, symbols, start_timestamp, end_timestamp, "bitfinex")
         self.url = "https://api-pub.bitfinex.com/v2/trades/{}/hist?limit=10000&start={}&end={}"
         self.rate_limit = 90
         self.interval = 60
@@ -337,7 +339,10 @@ class BitfinexHistoryTradeDataCrawler(BaseExchangeHistoryCrawler):
             return data_lst, start_timestamp, end_timestamp, 0
         for record in res_data:
             data = [self.exch_name]
-            tick = record[1] / 1000
+            try:
+                tick = int(record[1]) / 1000
+            except:
+                continue
             qty = abs(record[2])
             isBuyerMaker = True if record[2] > 0 else False
             quoteQty = qty * record[3]
@@ -351,36 +356,37 @@ class BitfinexHistoryTradeDataCrawler(BaseExchangeHistoryCrawler):
 
         return data_lst, start_timestamp, end_timestamp, size
 
-class PoloniexHistoryTradeDataCrawler(BaseExchangeHistoryCrawler):
-    def __init__(self, db_name, symbols):
-        super(PoloniexHistoryTradeDataCrawler, self).__init__(db_name, symbols, "poloniex")
-        self.url = "https://api.gemini.com/v1/trades/{}?timestamp={}&limit_trades=1000"
-        self.rate_limit = 1
-        self.interval = 1
+class LBankHistoryTradeDataCrawler(BaseExchangeHistoryCrawler):
+    def __init__(self, db_name, symbols, start_timestamp, end_timestamp):
+        super(LBankHistoryTradeDataCrawler, self).__init__(db_name, symbols, start_timestamp, end_timestamp, "lbank")
+        self.url = "https://api.lbkex.com/v2/trades.do?symbol={}&size=600&time={}"
+        self.rate_limit = 200
+        self.interval = 10
     
     def transform_symbol(self, symbol):
-        pair = symbol.split("_")
-        return pair[0]
+        sym = symbol.split("_")
+        sym = [k.lower() for k in sym]
+        return "_".join(sym)
 
     def construct_url(self, symbol, start_timestamp, end_timestamp):
         return self.url.format(symbol, start_timestamp * 1000, end_timestamp * 1000)
 
     def parse_data(self, res_data, start_timestamp, end_timestamp):
         data_lst = []
-        if len(res_data) == 0:
+        if res_data["result"] == "false":
             return data_lst, start_timestamp, end_timestamp, 0
-        for record in res_data:
+        
+        for record in res_data["data"]:
             data = [self.exch_name]
-            tick = record[1] / 1000
-            qty = abs(record[2])
-            isBuyerMaker = True if record[2] > 0 else False
-            quoteQty = qty * record[3]
-            data += [record[0], record[3], qty, quoteQty, tick, isBuyerMaker]
+            quoteQty = float(record["price"]) * float(record["amount"])
+            tick = int(record["date_ms"] / 1000)
+            isBuyerMaker = True if record["type"] == "buy" else False
+            data += [record["tid"], record["price"], record["amount"], quoteQty, tick, isBuyerMaker]
             data_lst.append(data)
+        
 
         size = len(data_lst)
         if size != 0:
-            # find the smallest timestamp to be the new end_timestamp
-            end_timestamp = int(res_data[-1][1] / 1000) - 1
+            start_timestamp = int(data_lst[-1][5]) + 1
 
         return data_lst, start_timestamp, end_timestamp, size
