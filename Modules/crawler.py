@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 import requests
 from .mysql_connector import CryptoCoinConnector
-from .print_section import print_error_sleep, print_sleep, print_write_data
+from .print_section import print_error_sleep, print_sleep, print_write_data, print_error_pair
 
 
 class BaseCrawler():
@@ -33,18 +33,19 @@ class BaseCrawler():
     def _kernel(self, *kwargs):
         raise NotImplementedError
 
-    def handle_network_issue(self, function, *kwargs):
+    def handle_network_issue(self, Exp, function, symbol):
         """Handle network issue"""
         FLAG = False
         for i in range(1, 60 * 10 + 1):
             if FLAG : break
-            print_error_sleep(i)
+            print_error_pair(Exp, self.exch_name + " " + symbol, i)
             time.sleep(i)
             try:
-                function(*kwargs)
+                function(symbol)
                 FLAG = True
 
-            except:
+            except Exception as e:
+                Exp = e
                 FLAG = False
 
     def run(self, test_flag=False):
@@ -65,9 +66,13 @@ class BaseExchangeCrawler(BaseCrawler):
     def __init__(self, db_name, interval, symbols, exch_name):
         super(BaseExchangeCrawler, self).__init__(db_name, interval)
         self.exch_name = exch_name
-
         self.symbols = symbols
+        self.verbose = True
+        self.use_proxy = False
     
+    def set_verbose(self, flag):
+        self.verbose = flag
+
     def transform_symbol(self, symbol):
         return symbol
     
@@ -75,16 +80,24 @@ class BaseExchangeCrawler(BaseCrawler):
         return self.url.format(symbol)
     
     def request_data(self, url):
+        data, response, proxies = None, None, None
         try:
-            proxies = {"http": "http://5.79.73.131:13150"}
+            if self.use_proxy:
+                proxies = {"http": "http://5.79.73.131:13150",
+                        "https": "http://5.79.73.131:13150"}
             response = requests.get(url, proxies=proxies)
-            return json.loads(response.text)
-        except:
-            raise RuntimeError
+            data = json.loads(response.text)
+
+            return data
+        except Exception as e:
+            if response != None:
+                return data
+            else:
+                raise e
 
     def parse_data(self, data, *kwargs):
         raise NotImplementedError
-    
+
     def write_into_db(self, data_lst, symbol):
         if data_lst == None or len(data_lst) == 0:
             return
@@ -95,29 +108,28 @@ class BaseExchangeCrawler(BaseCrawler):
             q_symbol = self.transform_symbol(symbol)
             url = self.construct_url(q_symbol)
             data = self.request_data(url)
+            if data == None:
+                return
             data_lst = self.parse_data(data)
             tab_sym = "".join(symbol.split("-"))
             self.write_into_db(data_lst, tab_sym)
-        except:
-            raise RuntimeError
+        except Exception as e:
+            raise e
 
     def run(self, test_flag=False):
         """Kernel function"""
         while True:
-            print_write_data()
-            for symbol in tqdm(self.symbols):
+            if self.verbose:
+                print_write_data()
+            for symbol in self.symbols:
                 try:
                     self._kernel(symbol)
-                except:
-                    if test_flag:
-                        pdb.set_trace()
-                        self._kernel(symbol)
-                        # raise RuntimeError
-                    else:
-                        self.handle_network_issue(self._kernel, symbol)
-            print_sleep(self.interval)
+                except Exception as e:
+                    self.handle_network_issue(e, self._kernel, symbol)
+            
             if test_flag:
                 break
+            print_sleep(self.interval)
             time.sleep(self.interval)
         self.connector.close()
 
@@ -544,6 +556,7 @@ class BitfinexTradeDataCrawler(BaseExchangeCrawler):
     def __init__(self, db_name, interval, symbols):
         super(BitfinexTradeDataCrawler, self).__init__(db_name, interval, symbols, "bitfinex")
         self.url = "https://api-pub.bitfinex.com/v2/trades/{}/hist?limit=1000&start={}&end={}"
+        self.use_proxy = True
     
     def transform_symbol(self, symbol):
         sym = symbol.split("-")
@@ -681,6 +694,7 @@ class BitflyerTradeDataCrawler(BaseExchangeCrawler):
     def __init__(self, db_name, interval, symbols):
         super(BitflyerTradeDataCrawler, self).__init__(db_name, interval, symbols, "bitflyer")
         self.url = "https://api.bitflyer.com/v1/getexecutions?product_code={}&count=100"
+        self.use_proxy = True
     
     def transform_symbol(self, symbol):
         sym = symbol.split("-")
@@ -696,14 +710,19 @@ class BitflyerTradeDataCrawler(BaseExchangeCrawler):
         date2tick = lambda time_str: time.mktime(datetime.datetime.strptime(time_str,
                                        r"%Y-%m-%d %H:%M:%S").timetuple())
         data_lst = []
-        for record in res_data:
-            data = [self.exch_name]
-            tick = date2tick(record["exec_date"].split(".")[0].replace("T", " "))
-            quoteQty = float(record["price"]) * float(record["size"])
-            isBuyerMaker = True if record["side"] == "BUY" else False
-            data += [record["id"], record["price"], record["size"], quoteQty, tick, isBuyerMaker]
-            data_lst.append(data)
-        return data_lst
+        try:
+            for record in res_data:
+                data = [self.exch_name]
+                tick = date2tick(record["exec_date"].split(".")[0].replace("T", " "))
+                quoteQty = float(record["price"]) * float(record["size"])
+                isBuyerMaker = True if record["side"] == "BUY" else False
+                data += [record["id"], record["price"], record["size"], quoteQty, tick, isBuyerMaker]
+                data_lst.append(data)
+
+            return data_lst
+        except Exception as e:
+            print(res_data)
+            raise e
 
 
 class PoloniexTradeDataCrawler(BaseExchangeCrawler):
@@ -915,7 +934,8 @@ class GokuMarketTradeDataCrawler(BaseExchangeCrawler):
             data = [self.exch_name]
             isBuyerMaker = True if record["type"] == "buy" else False
             tick = int(record["timestamp"] / 1000)
-            data += [record["timestamp"], record["price"], record["base_volume"], record["quote_volume"], tick, isBuyerMaker]
+            quote = record["quote_volume"] if "quote_volume" in record else None
+            data += [record["timestamp"], record["price"], record["base_volume"], quote, tick, isBuyerMaker]
             data_lst.append(data)
         return data_lst
 
