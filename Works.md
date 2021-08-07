@@ -23,6 +23,7 @@
     - The id is an unique id provided by CMC
 - APIs from CMC:
     - CMC provide endpoints to get symbol ids and some other informations. Please refer to CMC website.
+    - U can also refer to scripts: cluster.py to take an example.
     
 ## Ranking Coins
 - Background
