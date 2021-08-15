@@ -81,18 +81,49 @@ class CryptoCoinConnector(BaseMySQLConnector):
         self.exe_sql_many(sql, data)
         print("Insert meta data success!")
 
-    def create_trade_info_table(self, symbol):
+    def create_trade_info_table(self, symbol, start, end):
         """Create table of trade by tick in binance"""
-        table_name = "trade_of_{}".format(symbol)
-        sql = "CREATE TABLE IF NOT EXISTS {}".format(table_name)
-        sql += " (exch_name VARCHAR(255), id VARCHAR(255), price DOUBLE, qty DOUBLE, quoteQty DOUBLE, time BIGINT(8) unsigned, isBuyerMaker BOOL, PRIMARY KEY (exch_name, id))"
-        self.exe_sql(sql)
-        print("Tables Created Successfully!")
+        for i in range(start, end + 1):
+            table_name = "trade_of_{}_{}".format(symbol, i)
+            sql = "CREATE TABLE IF NOT EXISTS {}".format(table_name)
+            sql += " (exch_name VARCHAR(255), id VARCHAR(255), price DOUBLE, qty DOUBLE, quoteQty DOUBLE, time BIGINT(8) unsigned, isBuyerMaker BOOL, PRIMARY KEY (exch_name, id))"
+            self.exe_sql(sql)
+            print("table {} Created Successfully!".format(table_name))
 
-    def insert_trade_data(self, data, symbol):
-        table_name = "trade_of_{}".format(symbol)
+    def create_Kline_info_table(self, symbol, start, end):
+        """Create table of trade by tick in binance"""
+        for i in range(start, end + 1):
+            table_name = "Kline_of_{}_{}".format(symbol, i)
+            sql = "CREATE TABLE IF NOT EXISTS {}".format(table_name)
+            sql += " (exch_name VARCHAR(255), open DOUBLE, close DOUBLE, high DOUBLE, low DOUBLE, volume DOUBLE, time BIGINT(8) unsigned, PRIMARY KEY (exch_name, time))"
+            self.exe_sql(sql)
+            print("table {} Created Successfully!".format(table_name))
+            
+    def create_price_info_table(self, symbol, start, end):
+        """Create table of trade by tick in binance"""
+        for i in range(start, end + 1):
+            table_name = "price_of_{}_{}".format(symbol, i)
+            sql = "CREATE TABLE IF NOT EXISTS {}".format(table_name)
+            sql += " (price DOUBLE, volume DOUBLE, time BIGINT(8) unsigned, PRIMARY KEY (time))"
+            self.exe_sql(sql)
+            print("table {} Created Successfully!".format(table_name))
+
+    def insert_trade_data(self, data, symbol, table_index):
+        table_name = "trade_of_{}_{}".format(symbol, table_index)
         sql = "INSERT IGNORE INTO {} (exch_name, id, price, qty, quoteQty, time, isBuyerMaker) ".format(table_name)
         sql += "VALUES (%s, %s, %s, %s, %s, %s, %s)"
+        self.exe_sql_many(sql, data)
+
+    def insert_Kline_data(self, data, symbol, table_index):
+        table_name = "Kline_of_{}_{}".format(symbol, table_index)
+        sql = "INSERT IGNORE INTO {} (exch_name, open, close, high, low, volume, time) ".format(table_name)
+        sql += "VALUES (%s, %s, %s, %s, %s, %s, %s)"
+        self.exe_sql_many(sql, data)
+
+    def insert_price_data(self, data, symbol, table_index):
+        table_name = "price_of_{}_{}".format(symbol, table_index)
+        sql = "INSERT IGNORE INTO {} (price, volume, time) ".format(table_name)
+        sql += "VALUES (%s, %s, %s)"
         self.exe_sql_many(sql, data)
 
     def look_up_trade_info(self, symbol, start_time, end_time):
@@ -101,6 +132,20 @@ class CryptoCoinConnector(BaseMySQLConnector):
         sql += table_name
         sql += " where time > %s and time < %s"
         return self.fetch_sql_res(sql, (start_time, end_time))
+
+    def look_up_Kline_info(self, symbol, start_time, end_time):
+        start = int(int(str(start_time)[0:10]) / 2592000)
+        end = int(int(str(end_time)[0:10]) / 2592000)
+
+        res = []
+        for i in range(start, end + 1):
+            table_name = "Kline_of_{}_{}".format(symbol, i)
+            sql = "SELECT * from "
+            sql += table_name
+            sql += " where time >= %s and time <= %s"
+            res += self.fetch_sql_res(sql, (start_time, end_time))
+        
+        return res
     
     def look_up_trade_in_top_15(self, symbol, start_time, end_time, top_15):
         table_name = "trade_of_{}".format(symbol)
