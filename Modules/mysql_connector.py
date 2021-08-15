@@ -26,8 +26,8 @@ class BaseMySQLConnector():
         """Create connection to DB"""
         try:
             return mq.connect(host="localhost", user="root", passwd="123456")
-        except RuntimeError as e:
-            print(e)
+        except Exception as e:
+            raise e
 
     def fetch_sql_res(self, sql, vals):
         """Execute SQL and return the results"""
@@ -37,8 +37,8 @@ class BaseMySQLConnector():
             res = cursor.fetchall()
             cursor.close()
             return res
-        except RuntimeError as e:
-            print(e)
+        except Exception as e:
+            raise e
 
     def exe_sql(self, sql):
         """Execute the SQL"""
@@ -47,8 +47,8 @@ class BaseMySQLConnector():
             cursor.execute(sql)
             cursor.close()
             self.db.commit()
-        except RuntimeError as e:
-            print(e)
+        except Exception as e:
+            raise e
 
     def exe_sql_many(self, sql, vals):
         """Execute SQL with many values"""
@@ -57,8 +57,8 @@ class BaseMySQLConnector():
             cursor.executemany(sql, vals)
             cursor.close()
             self.db.commit()
-        except RuntimeError as e:
-            print(e)
+        except Exception as e:
+            raise e
 
     def close(self):
         """Disconnect"""
@@ -169,14 +169,23 @@ class CryptoCoinConnector(BaseMySQLConnector):
         sql = "SELECT * from coin_meta"
         return self.fetch_sql_res(sql, [])
     
+    def delete_trade_info(self, symbol):
+        table_name = "trade_of_{}".format(symbol)
+        sql = "DELETE from {}".format(table_name)
+        self.exe_sql(sql)
+
+    
 
 def InitTable(db_name, symbols, exch_names):
     connector = CryptoCoinConnector(db_name)
     connector.create_meta_table()
     data = []
-    for exch_name in exch_names:
-        for symbol in symbols:
-            utctick = int(time.time())
-            data.append( (exch_name, symbol, utctick) )
-            connector.create_trade_info_table(symbol)
-    connector.insert_meta_data(data)
+    for symbol in symbols:
+        connector.create_trade_info_table(symbol)
+    connector.close()
+    # for exch_name in exch_names:
+    #     for symbol in symbols:
+    #         utctick = int(time.time())
+    #         data.append( (exch_name, symbol, utctick) )
+            
+    # connector.insert_meta_data(data)
