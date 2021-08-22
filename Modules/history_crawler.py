@@ -69,7 +69,9 @@ class BaseExchangeHistoryCrawler(BaseCrawler):
         for symbol in symbols:
             utctick = int(time.time())
             data.append( (self.exch_name, symbol, utctick) )
-            self.connector.create_trade_info_table(symbol)
+            start = int(int(str(start_timestamp)[0:10]) / 2592000)
+            end = int(int(str(end_timestamp)[0:10]) / 2592000)
+            self.connector.create_trade_info_table(symbol, start, end)
         self.connector.insert_meta_data(data)
     
     def transform_symbol(self, symbol):
@@ -86,13 +88,24 @@ class BaseExchangeHistoryCrawler(BaseCrawler):
         raise NotImplementedError
     
     def write_into_db(self, data_lst, symbol):
-        self.connector.insert_trade_data(data_lst, symbol)
+        for record in data_lst:
+            timestamp = int(record[5])
+            table_index = int(timestamp / 2592000)
+            data = []
+            data.append(record)
+            self.connector.insert_trade_data(data, symbol, table_index)
 
     def _kernel(self, symbol, start_timestamp, end_timestamp):
         q_symbol = self.transform_symbol(symbol)
         url = self.construct_url(q_symbol, start_timestamp, end_timestamp)
         data = self.request_data(url)
         data_lst, start_timestamp, end_timestamp, size = self.parse_data(data, start_timestamp, end_timestamp)
+        
+        new_start = int(str(start_timestamp)[0:10])
+        new_end = int(str(end_timestamp)[0:10])
+        print(new_start / 2592000)
+        print(new_end / 2592000)
+        
         self.write_into_db(data_lst, symbol)
         return start_timestamp, end_timestamp, size
 

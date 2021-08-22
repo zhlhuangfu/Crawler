@@ -10,15 +10,23 @@ import mysql.connector as mq
 class BaseMySQLConnector():
     """Base abstract to connect to MySQL"""
 
-    def __init__(self, db_name):
+    def __init__(self, db_names):
         """Init"""
         self.db = BaseMySQLConnector.create_connection()
-        self.create_database(db_name)
+        self.create_databases(db_names)
+
+    def create_databases(self, db_names):
+        """Construct SQL to create DB"""
+        for db_name in db_names:
+            sql = "CREATE DATABASE IF NOT EXISTS {}".format(db_name)
+            self.exe_sql(sql)
 
     def create_database(self, db_name):
         """Construct SQL to create DB"""
         sql = "CREATE DATABASE IF NOT EXISTS {}".format(db_name)
         self.exe_sql(sql)
+
+    def use_database(self, db_name):
         self.exe_sql("USE {}".format(db_name))
 
     @classmethod
@@ -88,7 +96,7 @@ class CryptoCoinConnector(BaseMySQLConnector):
             sql = "CREATE TABLE IF NOT EXISTS {}".format(table_name)
             sql += " (exch_name VARCHAR(255), id VARCHAR(255), price DOUBLE, qty DOUBLE, quoteQty DOUBLE, time BIGINT(8) unsigned, isBuyerMaker BOOL, PRIMARY KEY (exch_name, id))"
             self.exe_sql(sql)
-            print("table {} Created Successfully!".format(table_name))
+            # print("table {} Created Successfully!".format(table_name))
 
     def create_Kline_info_table(self, symbol, start, end):
         """Create table of trade by tick in binance"""
@@ -97,14 +105,14 @@ class CryptoCoinConnector(BaseMySQLConnector):
             sql = "CREATE TABLE IF NOT EXISTS {}".format(table_name)
             sql += " (exch_name VARCHAR(255), open DOUBLE, close DOUBLE, high DOUBLE, low DOUBLE, volume DOUBLE, time BIGINT(8) unsigned, PRIMARY KEY (exch_name, time))"
             self.exe_sql(sql)
-            print("table {} Created Successfully!".format(table_name))
+            # print("table {} Created Successfully!".format(table_name))
             
     def create_price_info_table(self, symbol, start, end):
         """Create table of trade by tick in binance"""
         for i in range(start, end + 1):
             table_name = "price_of_{}_{}".format(symbol, i)
             sql = "CREATE TABLE IF NOT EXISTS {}".format(table_name)
-            sql += " (price DOUBLE, volume DOUBLE, time BIGINT(8) unsigned, PRIMARY KEY (time))"
+            sql += " (price DOUBLE, amount DOUBLE, volume DOUBLE, time BIGINT(8) unsigned, PRIMARY KEY (time))"
             self.exe_sql(sql)
             print("table {} Created Successfully!".format(table_name))
 
@@ -122,16 +130,23 @@ class CryptoCoinConnector(BaseMySQLConnector):
 
     def insert_price_data(self, data, symbol, table_index):
         table_name = "price_of_{}_{}".format(symbol, table_index)
-        sql = "INSERT IGNORE INTO {} (price, volume, time) ".format(table_name)
-        sql += "VALUES (%s, %s, %s)"
+        sql = "INSERT IGNORE INTO {} (price, amount, volume, time) ".format(table_name)
+        sql += "VALUES (%s, %s, %s, %s)"
         self.exe_sql_many(sql, data)
 
     def look_up_trade_info(self, symbol, start_time, end_time):
-        table_name = "trade_of_{}".format(symbol)
-        sql = "SELECT * from "
-        sql += table_name
-        sql += " where time > %s and time < %s"
-        return self.fetch_sql_res(sql, (start_time, end_time))
+        start = int(int(str(start_time)[0:10]) / 2592000)
+        end = int(int(str(end_time)[0:10]) / 2592000)
+
+        res = []
+        for i in range(start, end + 1):
+            table_name = "trade_of_{}_{}".format(symbol, i)
+            sql = "SELECT * from "
+            sql += table_name
+            sql += " where time >= %s and time <= %s"
+            res += self.fetch_sql_res(sql, (start_time, end_time))
+        
+        return res
 
     def look_up_Kline_info(self, symbol, start_time, end_time):
         start = int(int(str(start_time)[0:10]) / 2592000)

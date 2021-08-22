@@ -21,7 +21,15 @@ class BaseCrawler():
 
     def __init__(self, db_name, interval):
         self.interval = interval
-        self.connector = CryptoCoinConnector(db_name)
+        self.load_top_k_pair(500)
+        db_names = []
+        for i in range(49):
+            lower = i * 10 + 1
+            upper = lower + 9
+            db_name = "realtime_transactions_top{}_{}coins"
+            db_name = db_name.format(str(lower), str(upper))
+            db_names.append(db_name)
+        self.connector = CryptoCoinConnector(db_names)
         
     def write_into_db(self, json_data):
         """Write infomation into DB"""
@@ -32,6 +40,18 @@ class BaseCrawler():
 
     def _kernel(self, *kwargs):
         raise NotImplementedError
+
+    def load_top_k_pair(self, k):
+        with open("sorted_top_500_symbols.json") as fi:
+            dct = json.load(fi)
+        self.db_name_dict = {}
+        for t in range(k):
+            lower = int(t / 10) * 10 + 1
+            upper = lower + 9
+            db_name = "realtime_transactions_top{}_{}coins"
+            db_name = db_name.format(str(lower), str(upper))
+            symbol = dct[str(t + 1)] + "_USDT"
+            self.db_name_dict[symbol] = db_name
 
     def handle_network_issue(self, Exp, function, symbol):
         """Handle network issue"""
@@ -101,7 +121,28 @@ class BaseExchangeCrawler(BaseCrawler):
     def write_into_db(self, data_lst, symbol):
         if data_lst == None or len(data_lst) == 0:
             return
-        self.connector.insert_trade_data(data_lst, symbol)
+        db_name = self.db_name_dict[symbol]
+        self.connector.use_database(db_name)
+
+        # divide the data_lst into data_group with same table_index, and insert them into database
+        while len(data_lst) != 0:
+            table_index = int(int(data_lst[0][5]) / 2592000)
+
+            data_group = []
+            data_group.append(data_lst[0])
+            del data_lst[0]
+
+            j = 0
+            for i in range(len(data_lst)):
+                index = int(int(data_lst[j][5]) / 2592000)
+                if table_index == index:
+                    data_group.append(data_lst[j])
+                    del data_lst[j]
+                else:
+                    j = j + 1
+
+            self.connector.create_trade_info_table(symbol, table_index, table_index)
+            self.connector.insert_trade_data(data_group, symbol, table_index)
 
     def _kernel(self, symbol):
         try:
@@ -111,7 +152,7 @@ class BaseExchangeCrawler(BaseCrawler):
             if data == None:
                 return
             data_lst = self.parse_data(data)
-            tab_sym = "".join(symbol.split("-"))
+            tab_sym = "_".join(symbol.split("-"))
             self.write_into_db(data_lst, tab_sym)
         except Exception as e:
             raise e
